@@ -18,8 +18,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package hudson.plugins.throttleconcurrents;
+package hudson.plugins.serverselection;
 
+import hudson.plugins.serverselection.ServSelQueueTaskDispatcher;
 import com.gargoylesoftware.htmlunit.ElementNotFoundException;
 import com.gargoylesoftware.htmlunit.html.HtmlButton;
 import com.gargoylesoftware.htmlunit.html.HtmlElement;

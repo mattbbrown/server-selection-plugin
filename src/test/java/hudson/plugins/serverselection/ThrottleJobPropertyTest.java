@@ -1,5 +1,7 @@
-package hudson.plugins.throttleconcurrents;
+package hudson.plugins.serverselection;
 
+import hudson.plugins.serverselection.ServSelMatrixProjectOptions;
+import hudson.plugins.serverselection.ServSelJobProperty;
 import hudson.model.AbstractProject;
 import hudson.model.FreeStyleProject;
 import hudson.model.Job;

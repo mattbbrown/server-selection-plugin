@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package hudson.plugins.throttleconcurrents;
+package hudson.plugins.serverselection;
 
 import hudson.Extension;
 import hudson.matrix.MatrixBuild;

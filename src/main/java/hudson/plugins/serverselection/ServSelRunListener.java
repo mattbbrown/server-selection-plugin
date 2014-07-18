@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package hudson.plugins.throttleconcurrents;
+package hudson.plugins.serverselection;
 
 import hudson.Extension;
 import hudson.Launcher;

@@ -1,4 +1,4 @@
-package hudson.plugins.throttleconcurrents;
+package hudson.plugins.serverselection;
 
 import hudson.Extension;
 import hudson.matrix.MatrixConfiguration;
@@ -12,6 +12,7 @@ import hudson.model.Queue;
 import hudson.model.Queue.Task;
 import hudson.model.queue.CauseOfBlockage;
 import hudson.model.queue.QueueTaskDispatcher;
+import hudson.plugins.throttleconcurrents.Messages;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;

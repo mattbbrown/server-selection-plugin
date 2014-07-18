@@ -1,4 +1,4 @@
-package hudson.plugins.throttleconcurrents;
+package hudson.plugins.serverselection;
 
 import hudson.Extension;
 import hudson.matrix.MatrixConfiguration;
@@ -227,7 +227,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
     @Extension
     public static final class DescriptorImpl extends JobPropertyDescriptor {
 
-        private List<ThrottleCategory> categories;
+        private List<ThrottleCategory> categories = new ArrayList<ThrottleCategory>();
         private boolean simple;
         private Map<String, List<String>> allServers = new HashMap<String, List<String>>();
         private Map<String, String> serverTypes = new HashMap<String, String>();
@@ -389,9 +389,9 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public List<String> getCategoryNames() {
             List<String> categoryNames = new ArrayList<String>();
-            for (ThrottleCategory category : categories) {
-                categoryNames.add(category.getCategoryName());
-            }
+                for (ThrottleCategory category : categories) {
+                    categoryNames.add(category.getCategoryName());
+                }
             return categoryNames;
         }
 
