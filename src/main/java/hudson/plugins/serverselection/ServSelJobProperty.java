@@ -15,7 +15,13 @@ import hudson.util.ListBoxModel;
 import hudson.Util;
 import hudson.matrix.MatrixBuild;
 import hudson.matrix.MatrixProject;
+import hudson.model.AbstractBuild;
+import hudson.model.Cause;
+import hudson.model.Hudson;
+import hudson.model.Queue;
 import hudson.model.Queue.Task;
+import hudson.model.TaskListener;
+import java.io.IOException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -64,15 +70,16 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             List<String> categories,
             boolean throttleEnabled,
             String throttleOption,
+            String target,
             @CheckForNull ServSelMatrixProjectOptions matrixOptions
     ) {
         this.maxConcurrentPerNode = maxConcurrentPerNode == null || maxConcurrentPerNode == 0 ? 1 : maxConcurrentPerNode;
         this.maxConcurrentTotal = maxConcurrentTotal == null || maxConcurrentTotal == 0 ? 1 : maxConcurrentTotal;
-        this.categories = categories;
+        this.categories = categories == null ? new ArrayList<String>() : categories;
         this.throttleEnabled = throttleEnabled;
         this.throttleOption = throttleOption == null ? "category" : throttleOption;
         this.matrixOptions = matrixOptions;
-        this.target = "";
+        this.target = target == null ? "First Available Server" : target;
     }
 
     /**
@@ -129,7 +136,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
     public String getTarget() {
         if (target == null) {
-            target = "";
+            target = "First Available Server";
         }
         return target;
     }
@@ -228,12 +235,14 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
     public static final class DescriptorImpl extends JobPropertyDescriptor {
 
         private List<ThrottleCategory> categories = new ArrayList<ThrottleCategory>();
+        private List<String> allServersList = updateServerList();
+        private List<Integer> items = new ArrayList<Integer>();
         private boolean simple;
         private Map<String, List<String>> allServers = new HashMap<String, List<String>>();
         private Map<String, String> serverTypes = new HashMap<String, String>();
         private Map<String, List<String>> allFreeServers = new HashMap<String, List<String>>();
-        private Map<String, String> serverAssignments = new HashMap<String, String>();
-
+        private Map<String, String> serverAssignments = Collections.synchronizedMap(new HashMap<String, String>());
+        private Map<String, String> taskAssignments = Collections.synchronizedMap(new HashMap<String, String>());
         /**
          * Map from category names, to properties including that category.
          */
@@ -259,69 +268,119 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             }
         }
 
-        public List<String> getServersFromTJP(String targetServerType) {
-            List<String> servers = allServers.get(targetServerType);
-            return servers;
+        public List<String> updateServerList() {
+            List<String> newAllServersList = new ArrayList<String>();
+            try {
+                newAllServersList.add("First Available Server");
+                for (ThrottleCategory category : categories) {
+                    String serverType = category.getCategoryName();
+                    List<String> typeServerList = allFreeServers.get(serverType);
+                    if (typeServerList == null) {
+                        allFreeServers.put(serverType, allServers.get(serverType));
+                        typeServerList = allFreeServers.get(serverType);
+                    }
+                    newAllServersList.addAll(typeServerList);
+                }
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "{0}", e);
+            }
+            return newAllServersList;
         }
 
-        public synchronized String assignFirstFreeServer(String targetServerType, Task task) {
-            if (serverAssignments.get(task.getFullDisplayName()) != null) {
-                return "Server Already Assigned";
-            }
-            List<String> servers = allFreeServers.get(targetServerType);
-            if (servers == null) {
-                allFreeServers.put(targetServerType, allServers.get(targetServerType));
-                servers = allFreeServers.get(targetServerType);
-            }
-            if (servers.isEmpty()) {
-                return null;
-            }
-            String freeServer = servers.remove(0);
-            allFreeServers.put(task.getFullDisplayName(), servers);
-            serverAssignments.put(task.getFullDisplayName(), freeServer);
+        public List<String> getAllServersList() {
+            allServersList = updateServerList();
+            return allServersList;
+        }
 
+        public synchronized String assignServer(String targetServerType, Queue.Item item, String specificTarget) throws IOException, InterruptedException {
+            Task task = item.task;
+            String params = item.getParams().concat("\n");
+
+            if (items.contains(item.id)) {
+                items.remove(items.indexOf(item.id));
+                return "Server Already Selected";
+            }
+            LOGGER.log(Level.SEVERE, "item parameters for {0}: {1}", new Object[]{item.id, item.getParams()});
+            if (params.toLowerCase().contains("get_lock=no")) {
+                int indOfTarget = params.indexOf("TARGET=") + 7;
+                String target = params.substring(params.indexOf("TARGET=") + 7, params.indexOf("\n", indOfTarget));
+                assign(target, task);
+                return target;
+            }
+
+            String freeServer = null;
+            if (specificTarget.equals("First Available Server")) {
+                List<String> servers = allFreeServers.get(targetServerType);
+                if (servers == null) {
+                    allFreeServers.put(targetServerType, allServers.get(targetServerType));
+                    servers = allFreeServers.get(targetServerType);
+                }
+                if (!servers.isEmpty()) {
+                    freeServer = servers.remove(0);
+                    assign(freeServer, task);
+                    items.add(item.id);
+                }
+            } else {
+                for (ThrottleCategory category : categories) {
+                    String serverType = category.getCategoryName();
+                    List<String> servers = allFreeServers.get(serverType);
+                    if (servers == null) {
+                        allFreeServers.put(serverType, allServers.get(serverType));
+                        servers = allFreeServers.get(serverType);
+                    }
+                    if (servers.contains(specificTarget)) {
+                        freeServer = specificTarget;
+                        servers.remove(specificTarget);
+                        assign(freeServer, task);
+                        items.add(item.id);
+                        break;
+                    }
+                }
+            }
             return freeServer;
+        }
+
+        public void assign(String freeServer, Task task) {
+            int num = 1;
+            while (taskAssignments.get(task.getFullDisplayName() + " " + num) != null) {
+                num++;
+            }
+            taskAssignments.put(task.getFullDisplayName() + " " + num, freeServer);
+            serverAssignments.put(freeServer, task.getFullDisplayName() + " " + num);
         }
 
         public void setServers(String targetServerType, List<String> servers) {
             allServers.put(targetServerType, servers);
         }
 
-        public void setAllFreeServers() {
-
-        }
-
         public void setServerType(String server, String targetServerType) {
             serverTypes.put(server, targetServerType);
         }
 
-        public void takeServer(Task task, String server) {
-            serverAssignments.put(task.getFullDisplayName(), server);
-        }
-
-        public void takeServer(String displayName, String server) {
-            serverAssignments.put(displayName, server);
-        }
-
-        public String UsingServer(Task task) {
-            return serverAssignments.get(task.getFullDisplayName());
-        }
-
         public String UsingServer(String displayName) {
-            return serverAssignments.get(displayName);
+            int num = 1;
+            while (taskAssignments.get(displayName + " " + num) != null) {
+                num++;
+            }
+            String server = taskAssignments.get(displayName + " " + num);
+            return server;
         }
 
-        public void releaseServer(Task task) {
-            releaseServer(task.getFullDisplayName());
+        public void removeFromAssignments(String server) {
+            String taskName = serverAssignments.get(server);
+            taskAssignments.remove(taskName);
+            serverAssignments.remove(server);
         }
 
-        public void releaseServer(String displayName) {
-            String server = serverAssignments.get(displayName);
+        public String getServerAssignment(String serverName) {
+            return serverAssignments.get(serverName);
+        }
+
+        public void releaseServer(String server) {
             String targetServerType = serverTypes.get(server);
             List<String> servers = allFreeServers.get(targetServerType);
             servers.add(server);
             allFreeServers.put(targetServerType, servers);
-            serverAssignments.remove(displayName);
         }
 
         @Override
@@ -389,9 +448,9 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public List<String> getCategoryNames() {
             List<String> categoryNames = new ArrayList<String>();
-                for (ThrottleCategory category : categories) {
-                    categoryNames.add(category.getCategoryName());
-                }
+            for (ThrottleCategory category : categories) {
+                categoryNames.add(category.getCategoryName());
+            }
             return categoryNames;
         }
 

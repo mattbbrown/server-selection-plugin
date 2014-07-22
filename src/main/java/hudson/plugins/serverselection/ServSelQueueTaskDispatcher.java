@@ -3,16 +3,13 @@ package hudson.plugins.serverselection;
 import hudson.Extension;
 import hudson.matrix.MatrixConfiguration;
 import hudson.matrix.MatrixProject;
+import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.Computer;
-import hudson.model.Executor;
-import hudson.model.Hudson;
-import hudson.model.Node;
 import hudson.model.Queue;
 import hudson.model.Queue.Task;
 import hudson.model.queue.CauseOfBlockage;
 import hudson.model.queue.QueueTaskDispatcher;
-import hudson.plugins.throttleconcurrents.Messages;
+import java.io.IOException;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,31 +21,41 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
 
     @Override
     public CauseOfBlockage canRun(Queue.Item item) {
-        Task task = item.task;
-        ServSelJobProperty tjp = getThrottleJobProperty(task);
-        if (!shouldBeThrottled(task, tjp)) {
-            return null;
-        }
-        String targetServerType = tjp.getCategories().get(0);
-        ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
-        String serverTaken = descriptor.assignFirstFreeServer(targetServerType, task);
-        if (serverTaken == null) {
-            return CauseOfBlockage.fromMessage(Messages._ThrottleQueueTaskDispatcher_NoFreeServers(targetServerType));
+        try {
+            Task task = item.task;
+            ServSelJobProperty tjp = getThrottleJobProperty(task);
+            if (!shouldBeThrottled(item, tjp)) {
+                return null;
+            }
+
+            String targetServerType = tjp.getCategories().get(0);
+            String serverTaken;
+            String params = item.getParams().concat("\n");
+            String specificServer = "First Available Server";
+            if (params.contains("TARGET=")) {
+                int indOfTarget = params.indexOf('=') + 7;
+                specificServer = params.substring(indOfTarget, params.indexOf('\n', indOfTarget));
+            }
+            ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
+            serverTaken = descriptor.assignServer(targetServerType, item, specificServer);
+            if (serverTaken == null && !specificServer.equals("First Available Server")) {
+                String taskUsingServer = descriptor.getServerAssignment(specificServer);
+                if (taskUsingServer == null) {
+                    taskUsingServer = "No Task";
+                }
+                return CauseOfBlockage.fromMessage(Messages._ThrottleQueueTaskDispatcher_SpecificServerBusy(specificServer, taskUsingServer));
+            }
+            if (serverTaken == null) {
+                return CauseOfBlockage.fromMessage(Messages._ThrottleQueueTaskDispatcher_NoFreeServers(targetServerType));
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Exception raised in canRun: ", e);
         }
         return null;
     }
 
-    @Nonnull
-    private ServSelMatrixProjectOptions getMatrixOptions(Task task) {
-        ServSelJobProperty tjp = getThrottleJobProperty(task);
-        if (tjp == null) {
-            return ServSelMatrixProjectOptions.DEFAULT;
-        }
-        ServSelMatrixProjectOptions matrixOptions = tjp.getMatrixOptions();
-        return matrixOptions != null ? matrixOptions : ServSelMatrixProjectOptions.DEFAULT;
-    }
-
-    private boolean shouldBeThrottled(@Nonnull Task task, @CheckForNull ServSelJobProperty tjp) {
+    private boolean shouldBeThrottled(@Nonnull Queue.Item item, @CheckForNull ServSelJobProperty tjp) throws IOException, InterruptedException {
+        Task task = item.task;
         if (tjp == null) {
             return false;
         }
@@ -68,46 +75,6 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
         }
 
         return true;
-    }
-
-    private boolean serverIsFree(String serverName) {
-        boolean serverFree = true;
-        if (serverIsBeingUsedOnNode(Hudson.getInstance(), serverName)) {
-            serverFree = false;
-        } else {
-            for (Node node : Hudson.getInstance().getNodes()) {
-                if (serverIsBeingUsedOnNode(node, serverName)) {
-                    serverFree = false;
-                }
-            }
-        }
-        return serverFree;
-    }
-
-    private boolean serverIsBeingUsedOnNode(Node node, String serverName) {
-        boolean serverBeingUsedOnNode = false;
-        Computer computer = node.toComputer();
-        if (computer != null) {
-            for (Executor e : computer.getExecutors()) {
-                if (buildOnExecutorUsingServer(serverName, e)) {
-                    serverBeingUsedOnNode = true;
-                    break;
-                }
-            }
-        }
-        return serverBeingUsedOnNode;
-    }
-
-    private boolean buildOnExecutorUsingServer(String serverName, Executor exec) {
-        if (exec.getCurrentExecutable() != null) {
-            Task task = exec.getCurrentExecutable().getParent().getOwnerTask();
-            ServSelJobProperty tjp = getThrottleJobProperty(task);
-            if (tjp != null) {
-                ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
-                return descriptor.UsingServer(task).equals(serverName);
-            }
-        }
-        return false;
     }
 
     @CheckForNull

@@ -1,20 +1,20 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form" xmlns:p="/lib/hudson/project">
-        <f:optionalBlock name="throttleEnabled"
-                         title="${%Target Server Type}"
-                         inline="true"
-                         checked="${instance.throttleEnabled}">
-            <f:entry>
-                <table width="100%">
-                    <tr>
-                        <td width="80%">
-                            <select class="setting-input" name="categories">                      
-                                <j:forEach var="cat" items="${descriptor.categories}">
-                                    <f:option selected="${instance.categories.get(0).equals(cat.categoryName)}" value="${cat.categoryName}">${cat.categoryName}</f:option>
-                                </j:forEach>
-                            </select>
-                        </td>
-                    </tr>
-                </table>
-            </f:entry>
-        </f:optionalBlock>
+    <f:optionalBlock name="throttleEnabled"
+                     title="${%Target Server Selection}"
+                     inline="true"
+                     checked="${instance.throttleEnabled}">          
+        <f:entry title="Server Type">
+            <table width="90%">
+                <tr>
+                    <td width="80%">
+                        <select class="setting-input" name="categories">                      
+                            <j:forEach var="cat" items="${descriptor.categories}">
+                                <f:option selected="${instance.categories.get(0).equals(cat.categoryName)}" value="${cat.categoryName}">${cat.categoryName}</f:option>
+                            </j:forEach>
+                        </select>
+                    </td>
+                </tr>
+            </table>
+        </f:entry>
+    </f:optionalBlock>
 </j:jelly>
