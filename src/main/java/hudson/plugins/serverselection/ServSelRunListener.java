@@ -11,12 +11,12 @@ import hudson.matrix.MatrixConfiguration;
 import hudson.matrix.MatrixProject;
 import hudson.model.*;
 import hudson.model.listeners.RunListener;
+import hudson.plugins.serverselection.ServSelJobProperty.DescriptorImpl;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import jenkins.model.Jenkins;
 
 /**
  *
@@ -25,7 +25,7 @@ import java.util.logging.Logger;
 @Extension
 public final class ServSelRunListener extends RunListener<AbstractBuild> {
 
-    Map<String, String> assignments = Collections.synchronizedMap(new HashMap<String, String>());
+    DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(DescriptorImpl.class);
 
     public ServSelRunListener() {
         super(AbstractBuild.class);
@@ -44,12 +44,13 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                     tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
                 }
                 if (tjp != null) {
-                    ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
-                    String target = descriptor.UsingServer(getShortName(build));
-                    assignments.put(build.getFullDisplayName(), target);
-                    env.put("TARGET", target);
-                    env.put("YAML_TARGET", getYmlTarget(tjp, target));
-                    descriptor.removeFromAssignments(target);
+                    TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
+                    String targetName = targetServer != null ? targetServer.getName() : null;
+                    LOGGER.log(Level.SEVERE, "target: {0}", targetName);
+                    if (targetName != null) {
+                        env.put("TARGET", targetName);
+                        env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                    }
                 }
             }
         };
@@ -65,7 +66,8 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
             tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
         if (tjp != null && !(project instanceof MatrixProject)) {
-            String target = assignments.get(build.getFullDisplayName());
+            String target = descriptor.UsingServer(getShortName(build));
+            descriptor.putFullAssignments(nameNoSpaces(build), target);
             listener.getLogger().println("[Server Selector] Target server set to " + target);
         }
     }
@@ -80,14 +82,19 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
             tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
         if (tjp != null && !(project instanceof MatrixProject)) {
-            ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
-            String target = assignments.get(build.getFullDisplayName());
-            listener.getLogger().println("[Server Selector] Releasing server " + target);
-            if (build.getBuildVariables().get("GET_LOCK") == null || ((String) build.getBuildVariables().get("GET_LOCK")).toLowerCase().equals("yes")) {
-                descriptor.releaseServer(target);
+            TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
+            String targetName = targetServer.getName();
+            String getLock = (String) build.getBuildVariables().get("GET_LOCK");
+            if (getLock == null || getLock.toLowerCase().equals("yes")) {
+                listener.getLogger().println("[Server Selector] Releasing server " + targetName);
+                descriptor.releaseServer(targetName);
+                descriptor.removeFullAssignments(nameNoSpaces(build));
             }
-            assignments.remove(build.getFullDisplayName());
         }
+    }
+
+    private String nameNoSpaces(AbstractBuild build) {
+        return build.getFullDisplayName().replace(" ", "_");
     }
 
     private String getShortName(AbstractBuild build) {

@@ -35,11 +35,11 @@ public class ServSelPeriodicWork extends PeriodicWork {
             List<String> serverTypes = descriptor.getCategoryNames();
             if (serverTypes != null && !serverTypes.isEmpty()) {
                 for (String targetServerType : serverTypes) {
-                    List<String> serverList = new ArrayList<String>();
+                    List<TargetServer> serverList = new ArrayList<TargetServer>();
                     Process p;
                     try {
                         Runtime R = Runtime.getRuntime();
-                        p = R.exec(new String[] {"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"});
+                        p = R.exec(new String[]{"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"});
                         BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
                         p.waitFor();
 
@@ -47,10 +47,15 @@ public class ServSelPeriodicWork extends PeriodicWork {
                         reader.readLine();
                         reader.readLine();
                         while ((server = reader.readLine()) != null) {
-                            serverList.add(server);
-                            descriptor.setServerType(server, targetServerType);
+                            TargetServer targetServer = descriptor.getTargetServer(server);
+                            if (targetServer == null) {
+                                targetServer = new TargetServer(server,targetServerType);
+                            }
+                            targetServer.setServerType(targetServerType);
+                            descriptor.setTargetServer(targetServer);
+                            serverList.add(targetServer);
                         }
-                            LOGGER.log(Level.SEVERE,"{0} servers from Chef: {1}",new Object[] {targetServerType, serverList});
+                        LOGGER.log(Level.SEVERE, "{0} servers from Chef: {1}", new Object[]{targetServerType, serverList});
                         descriptor.setServers(targetServerType, serverList);
                     } catch (Exception e) {
                         LOGGER.log(Level.SEVERE, "Chef call exception raised: {0}", e);

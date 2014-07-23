@@ -24,6 +24,7 @@ import hudson.model.TaskListener;
 import java.io.IOException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -234,15 +235,16 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
     @Extension
     public static final class DescriptorImpl extends JobPropertyDescriptor {
 
+        public static final String DELIMETER = "\\r?\\n";
         private List<ThrottleCategory> categories = new ArrayList<ThrottleCategory>();
         private List<String> allServersList = updateServerList();
         private List<Integer> items = new ArrayList<Integer>();
         private boolean simple;
-        private Map<String, List<String>> allServers = new HashMap<String, List<String>>();
-        private Map<String, String> serverTypes = new HashMap<String, String>();
-        private Map<String, List<String>> allFreeServers = new HashMap<String, List<String>>();
-        private Map<String, String> serverAssignments = Collections.synchronizedMap(new HashMap<String, String>());
-        private Map<String, String> taskAssignments = Collections.synchronizedMap(new HashMap<String, String>());
+        private Map<String, TargetServer> allTargetServers = new HashMap<String, TargetServer>();
+        private Map<String, List<TargetServer>> allServersByType = new HashMap<String, List<TargetServer>>();
+        private Map<String, List<TargetServer>> allFreeServers = new HashMap<String, List<TargetServer>>();
+        private Map<String, String> taskAssignments = new HashMap<String, String>();
+        private Map<String, TargetServer> fullNameAssigns = new HashMap<String, TargetServer>();
         /**
          * Map from category names, to properties including that category.
          */
@@ -270,19 +272,13 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public List<String> updateServerList() {
             List<String> newAllServersList = new ArrayList<String>();
-            try {
-                newAllServersList.add("First Available Server");
-                for (ThrottleCategory category : categories) {
-                    String serverType = category.getCategoryName();
-                    List<String> typeServerList = allFreeServers.get(serverType);
-                    if (typeServerList == null) {
-                        allFreeServers.put(serverType, allServers.get(serverType));
-                        typeServerList = allFreeServers.get(serverType);
-                    }
-                    newAllServersList.addAll(typeServerList);
+            newAllServersList.add("First Available Server");
+            for (ThrottleCategory category : categories) {
+                String serverType = category.getCategoryName();
+                List<TargetServer> serverOfType = allServersByType.get(serverType);
+                for (TargetServer servers : serverOfType) {
+                    newAllServersList.add(servers.getName());
                 }
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "{0}", e);
             }
             return newAllServersList;
         }
@@ -292,9 +288,27 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             return allServersList;
         }
 
+        public Map<String, TargetServer> getFullAssigns() {
+            return fullNameAssigns;
+        }
+
+        public void putFullAssignments(String fullName, String server) {
+            fullNameAssigns.put(fullName, getTargetServer(server));
+
+        }
+
+        public void removeFullAssignments(String fullName) {
+            fullNameAssigns.remove(fullName);
+        }
+
+        public TargetServer getFullAssignments(String fullName) {
+            return fullNameAssigns.get(fullName);
+        }
+
         public synchronized String assignServer(String targetServerType, Queue.Item item, String specificTarget) throws IOException, InterruptedException {
             Task task = item.task;
             String params = item.getParams().concat("\n");
+            //String build = null, version = null;
 
             if (items.contains(item.id)) {
                 items.remove(items.indexOf(item.id));
@@ -302,38 +316,69 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             }
             LOGGER.log(Level.SEVERE, "item parameters for {0}: {1}", new Object[]{item.id, item.getParams()});
             if (params.toLowerCase().contains("get_lock=no")) {
-                int indOfTarget = params.indexOf("TARGET=") + 7;
-                String target = params.substring(params.indexOf("TARGET=") + 7, params.indexOf("\n", indOfTarget));
-                assign(target, task);
-                return target;
+                assign(specificTarget, task);
+                items.add(item.id);
+                return specificTarget;
             }
+            /*
+             SPECIFIC BUILD/VERSION CODE FOR NEXT VERSION
+             if (params.contains("BUILD=")) {
+             int indOfBuild = params.indexOf("BUILD=") + 7;
+             build = params.substring(indOfBuild, params.indexOf("\n", indOfBuild));
+             }
 
+             if (params.contains("VERSION=")) {
+             int indOfVersion = params.indexOf("VERSION=") + 7;
+             version = params.substring(indOfVersion, params.indexOf("\n", indOfVersion));
+             }
+             */
             String freeServer = null;
             if (specificTarget.equals("First Available Server")) {
-                List<String> servers = allFreeServers.get(targetServerType);
+                List<TargetServer> servers = allFreeServers.get(targetServerType);
                 if (servers == null) {
-                    allFreeServers.put(targetServerType, allServers.get(targetServerType));
+                    allFreeServers.put(targetServerType, allServersByType.get(targetServerType));
                     servers = allFreeServers.get(targetServerType);
                 }
                 if (!servers.isEmpty()) {
-                    freeServer = servers.remove(0);
+                    freeServer = servers.remove(0).getName();
                     assign(freeServer, task);
                     items.add(item.id);
                 }
+                /*
+                 SPECIFIC BUILD/VERSION CODE FOR NEXT VERSION
+                 for (TargetServer targetServer : servers) {
+                 boolean buildGood = true;
+                 boolean versionGood = true;
+                 if (build != null) {
+                 buildGood = targetServer.getBuild().equals(build);
+                 }
+                 if (version != null) {
+                 versionGood = targetServer.getVersion().equals(version);
+                 }
+                 if (buildGood && versionGood) {
+                 freeServer = servers.get(servers.indexOf(targetServer)).getName();
+                 assign(freeServer, task);
+                 items.add(item.id);
+                 break;
+                 }
+                 }
+                 */
             } else {
                 for (ThrottleCategory category : categories) {
                     String serverType = category.getCategoryName();
-                    List<String> servers = allFreeServers.get(serverType);
+                    List<TargetServer> servers = allFreeServers.get(serverType);
                     if (servers == null) {
-                        allFreeServers.put(serverType, allServers.get(serverType));
+                        allFreeServers.put(serverType, allServersByType.get(serverType));
                         servers = allFreeServers.get(serverType);
                     }
-                    if (servers.contains(specificTarget)) {
-                        freeServer = specificTarget;
-                        servers.remove(specificTarget);
-                        assign(freeServer, task);
-                        items.add(item.id);
-                        break;
+                    for (TargetServer targetServer : servers) {
+                        if (targetServer.getName().equals(specificTarget)) {
+                            freeServer = specificTarget;
+                            servers.remove(targetServer);
+                            assign(freeServer, task);
+                            items.add(item.id);
+                            break;
+                        }
                     }
                 }
             }
@@ -342,45 +387,62 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public void assign(String freeServer, Task task) {
             int num = 1;
-            while (taskAssignments.get(task.getFullDisplayName() + " " + num) != null) {
-                num++;
+            boolean foundTask = false;
+            String taskName = null;
+            while (!foundTask) {
+                taskName = task.getFullDisplayName().replace(" ", "_") + "_num_" + num;
+                if (taskAssignments.get(taskName) == null) {
+                    foundTask = true;
+                } else {
+                    num++;
+                }
             }
-            taskAssignments.put(task.getFullDisplayName() + " " + num, freeServer);
-            serverAssignments.put(freeServer, task.getFullDisplayName() + " " + num);
+            LOGGER.log(Level.SEVERE, "task name: {0}", taskName);
+            taskAssignments.put(taskName, freeServer);
+            LOGGER.log(Level.SEVERE, "taskAssignments: {0}", taskAssignments);
         }
 
-        public void setServers(String targetServerType, List<String> servers) {
-            allServers.put(targetServerType, servers);
-        }
-
-        public void setServerType(String server, String targetServerType) {
-            serverTypes.put(server, targetServerType);
+        public void setServers(String targetServerType, List<TargetServer> servers) {
+            allServersByType.put(targetServerType, servers);
         }
 
         public String UsingServer(String displayName) {
             int num = 1;
-            while (taskAssignments.get(displayName + " " + num) != null) {
-                num++;
+            boolean foundServer = false;
+            String taskName = null;
+            while (num < 10) {
+                taskName = displayName.replace(" ", "_") + "_num_" + num;
+                if (taskAssignments.get(taskName) != null) {
+                    foundServer = true;
+                    break;
+                } else {
+                    num++;
+                }
             }
-            String server = taskAssignments.get(displayName + " " + num);
+            if (!foundServer) {
+                LOGGER.log(Level.SEVERE, "NO SERVER FOUND for {0}, taskAssignments: {1}", new Object[]{displayName, taskAssignments});
+            }
+            String server = taskAssignments.remove(taskName);
             return server;
         }
 
-        public void removeFromAssignments(String server) {
-            String taskName = serverAssignments.get(server);
-            taskAssignments.remove(taskName);
-            serverAssignments.remove(server);
-        }
-
-        public String getServerAssignment(String serverName) {
-            return serverAssignments.get(serverName);
+        public String getServerAssignment(String server) {
+            return getTargetServer(server).getTask();
         }
 
         public void releaseServer(String server) {
-            String targetServerType = serverTypes.get(server);
-            List<String> servers = allFreeServers.get(targetServerType);
-            servers.add(server);
-            allFreeServers.put(targetServerType, servers);
+            TargetServer targetServer = getTargetServer(server);
+            targetServer.setTask(null);
+            List<TargetServer> servers = allFreeServers.get(targetServer.getServerType());
+            servers.add(targetServer);
+        }
+
+        public TargetServer getTargetServer(String server) {
+            return allTargetServers.get(server);
+        }
+
+        public void setTargetServer(TargetServer targetServer) {
+            allTargetServers.put(targetServer.getName(), targetServer);
         }
 
         @Override

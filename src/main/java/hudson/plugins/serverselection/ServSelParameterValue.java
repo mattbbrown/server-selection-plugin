@@ -21,9 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package hudson.plugins.serverselection;
-
 
 import hudson.EnvVars;
 import hudson.model.AbstractBuild;
@@ -41,7 +39,8 @@ import java.util.Map;
  * {@link ParameterValue} created from {@link StringParameterDefinition}.
  */
 public class ServSelParameterValue extends ParameterValue {
-    @Exported(visibility=4)
+
+    @Exported(visibility = 4)
     public final String value;
 
     @DataBoundConstructor
@@ -54,55 +53,43 @@ public class ServSelParameterValue extends ParameterValue {
         this.value = value;
     }
 
-    /**
-     * Exposes the name/value as an environment variable.
-     */
     @Override
-    public void buildEnvVars(AbstractBuild<?,?> build, EnvVars env) {
-        env.put(name,value);
-        env.put(name.toUpperCase(Locale.ENGLISH),value); // backward compatibility pre 1.345
+    public int hashCode() {
+        final int prime = 31;
+        int result = super.hashCode();
+        result = prime * result + ((value == null) ? 0 : value.hashCode());
+        return result;
     }
 
     @Override
-    public VariableResolver<String> createVariableResolver(final AbstractBuild<?, ?> build) {
-        return new VariableResolver<String>() {
-            public String resolve(String name) {
-                return ServSelParameterValue.this.name.equals(name) ? value : null;
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!super.equals(obj)) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        ServSelParameterValue other = (ServSelParameterValue) obj;
+        if (value == null) {
+            if (other.value != null) {
+                return false;
             }
-        };
+        } else if (!value.equals(other.value)) {
+            return false;
+        }
+        return true;
     }
-
-    @Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
-		result = prime * result + ((value == null) ? 0 : value.hashCode());
-		return result;
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (!super.equals(obj))
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		ServSelParameterValue other = (ServSelParameterValue) obj;
-		if (value == null) {
-			if (other.value != null)
-				return false;
-		} else if (!value.equals(other.value))
-			return false;
-		return true;
-	}
 
     @Override
     public String toString() {
-    	return "(ServSelParameterValue) " + getName() + "='" + value + "'";
+        return "(ServSelParameterValue) " + getName() + "='" + value + "'";
     }
 
-    @Override public String getShortDescription() {
+    @Override
+    public String getShortDescription() {
         return name + '=' + value;
     }
 

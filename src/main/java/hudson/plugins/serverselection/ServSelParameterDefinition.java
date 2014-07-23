@@ -36,7 +36,7 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
 
     @DataBoundConstructor
     public ServSelParameterDefinition() {
-        super("TARGET", "Select a server to run job against. Note: selecting a specific server will override the Target Server Type");
+        super("TARGET", "Note: selecting a specific server will override the Target Server Type and the build/version parameters");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
         choices = descriptor.getAllServersList();
         defaultValue = null;
@@ -97,7 +97,7 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
 
         @Override
         public String getDisplayName() {
-            return "Server Selection Parameter Definition";
+            return "Server Selection Parameter";
         }
 
         @Override

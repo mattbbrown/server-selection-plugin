@@ -33,8 +33,8 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
             String params = item.getParams().concat("\n");
             String specificServer = "First Available Server";
             if (params.contains("TARGET=")) {
-                int indOfTarget = params.indexOf('=') + 7;
-                specificServer = params.substring(indOfTarget, params.indexOf('\n', indOfTarget));
+                int indOfTarget = params.indexOf("TARGET=") + 7;
+                specificServer = params.substring(indOfTarget, params.indexOf("\n", indOfTarget));
             }
             ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
             serverTaken = descriptor.assignServer(targetServerType, item, specificServer);

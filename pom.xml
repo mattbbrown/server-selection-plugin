@@ -32,8 +32,8 @@ THE SOFTWARE.
   <artifactId>server-selection-plugin</artifactId>
   <packaging>hpi</packaging>
   <name>Jenkins Server Selection Plug-in</name>
-  <version>1.8.4-SNAPSHOT</version>
-  <description>Plugin to dynamically assign available servers to jobs</description>
+  <version>0.0.1</version>
+  <description>Plugin to dynamically assign available servers to jobs (No Dynamic Deploy)</description>
   
   <licenses>
     <license>
