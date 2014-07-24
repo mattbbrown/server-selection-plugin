@@ -16,12 +16,20 @@ public class TargetServer {
     private String task;
     private String build;
     private String version;
+    private String inUse;
 
     public TargetServer(String name, String serverType) {
         this.name = name;
         this.serverType = serverType;
     }
-
+    
+    public void setEverything(String serverType, String build, String version, String inUse){
+        this.serverType = serverType;
+        this.build = build;
+        this.version = version;
+        this.inUse = inUse;
+    }
+    
     public String getName() {
         return name;
     }

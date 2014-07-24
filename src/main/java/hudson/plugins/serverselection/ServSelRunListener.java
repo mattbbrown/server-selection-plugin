@@ -43,7 +43,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                 } else {
                     tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
                 }
-                if (tjp != null) {
+                if (tjp != null && tjp.getThrottleEnabled()) {
                     TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
                     String targetName = targetServer != null ? targetServer.getName() : null;
                     LOGGER.log(Level.SEVERE, "target: {0}", targetName);
@@ -65,7 +65,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         } else {
             tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (tjp != null && !(project instanceof MatrixProject)) {
+        if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             String target = descriptor.UsingServer(getShortName(build));
             descriptor.putFullAssignments(nameNoSpaces(build), target);
             listener.getLogger().println("[Server Selector] Target server set to " + target);
@@ -81,7 +81,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         } else {
             tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (tjp != null && !(project instanceof MatrixProject)) {
+        if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
             String targetName = targetServer.getName();
             String getLock = (String) build.getBuildVariables().get("GET_LOCK");

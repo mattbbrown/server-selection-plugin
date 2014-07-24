@@ -38,23 +38,40 @@ public class ServSelPeriodicWork extends PeriodicWork {
                     List<TargetServer> serverList = new ArrayList<TargetServer>();
                     Process p;
                     try {
+                        String fullCmd = "rvm use ruby-1.9.3-p547@knife do knife exec -E \"nodes.find(:tags =>\\\"SA_Windows_2012\\\"){|n|puts(n.name+\\\",\\\"+n.environment+\\\",\\\"+n[\\\"vht\\\"][\\\"installed_version\\\"]+\\\",\\\"+n.tags.include?(\\\"in_use\\\").to_s)}\"";
+                        //String[] command = {"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "exec", "--exec \"puts('HelloWorld')\""};
+                        //"\"nodes.find(:tags =>'"+targetServerType+"'){|n|puts(n.name+','+n.environment+','+n['vht']['installed_version']+','+n.tags.include?('in_use').to_s)}\""};
+                        String fullCall = "";
+                        LOGGER.log(Level.SEVERE, "Full call: {0}", fullCmd);
+
                         Runtime R = Runtime.getRuntime();
-                        p = R.exec(new String[]{"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"});
+                        p = R.exec(fullCmd);
                         BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                        BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
                         p.waitFor();
 
-                        String server;
-                        reader.readLine();
-                        reader.readLine();
-                        while ((server = reader.readLine()) != null) {
+                        String line;
+                        String total = "ErrorLevel: " + p.exitValue();
+                        while ((line = reader.readLine()) != null) {
+                            total = total.concat("\n" + line);
+                            String[] info = line.split(" ");
+                            String server = info[0], build = info[1], version = info[2], inUse = info[3];
                             TargetServer targetServer = descriptor.getTargetServer(server);
                             if (targetServer == null) {
-                                targetServer = new TargetServer(server,targetServerType);
+                                targetServer = new TargetServer(server, targetServerType);
                             }
-                            targetServer.setServerType(targetServerType);
+                            targetServer.setEverything(targetServerType, build, version, inUse);
                             descriptor.setTargetServer(targetServer);
                             serverList.add(targetServer);
                         }
+                        LOGGER.log(Level.SEVERE, "Here is the standard output of the command (if any):\n {0}", total);
+                        String s;
+                        total = "";
+                        while ((s = stdError.readLine()) != null) {
+                            total = total.concat(s + "\n");
+                        }
+                        LOGGER.log(Level.SEVERE, "Here is the standard error of the command (if any):\n {0}", total);
+
                         LOGGER.log(Level.SEVERE, "{0} servers from Chef: {1}", new Object[]{targetServerType, serverList});
                         descriptor.setServers(targetServerType, serverList);
                     } catch (Exception e) {
