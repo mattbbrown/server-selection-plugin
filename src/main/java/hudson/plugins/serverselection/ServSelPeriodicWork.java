@@ -39,7 +39,9 @@ public class ServSelPeriodicWork extends PeriodicWork {
                     Process p;
                     try {
                         Runtime R = Runtime.getRuntime();
-                        p = R.exec(new String[]{"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"});
+                        String command = "rvm use ruby-1.9.3-p547@knife do knife exec -E \"nodes.find(:tags =>\\\"SA_Windows_2012\\\"){|n|puts(n.name+\\\",\\\"+n.environment+\\\",\\\"+n[\\\"vht\\\"][\\\"installed_version\\\"]+\\\",\\\"+n.tags.include?(\\\"in_use\\\").to_s)}\"";
+                        p = R.exec(command);
+                        //p = R.exec(new String[]{"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"});
                         BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
                         p.waitFor();
 
@@ -49,7 +51,7 @@ public class ServSelPeriodicWork extends PeriodicWork {
                         while ((server = reader.readLine()) != null) {
                             TargetServer targetServer = descriptor.getTargetServer(server);
                             if (targetServer == null) {
-                                targetServer = new TargetServer(server,targetServerType);
+                                targetServer = new TargetServer(server, targetServerType);
                             }
                             targetServer.setServerType(targetServerType);
                             descriptor.setTargetServer(targetServer);

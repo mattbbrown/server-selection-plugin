@@ -3,7 +3,6 @@ package hudson.plugins.serverselection;
 import hudson.Extension;
 import hudson.matrix.MatrixConfiguration;
 import hudson.matrix.MatrixProject;
-import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Queue;
 import hudson.model.Queue.Task;

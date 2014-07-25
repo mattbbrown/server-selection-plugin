@@ -41,24 +41,33 @@ import java.util.Map;
 public class ServSelParameterValue extends ParameterValue {
 
     @Exported(visibility = 4)
-    public final String value;
+    public final String server, environ, version;
 
     @DataBoundConstructor
-    public ServSelParameterValue(String name, String value) {
-        this(name, value, null);
+    public ServSelParameterValue(String name, String server, String environ, String version) {
+        this(name, server, environ, version, null);
     }
 
-    public ServSelParameterValue(String name, String value, String description) {
+    public ServSelParameterValue(String name, String server, String environ, String version, String description) {
         super(name, description);
-        this.value = value;
+        this.server = server;
+        this.environ = environ;
+        this.version = version;
     }
 
     @Override
     public int hashCode() {
         final int prime = 31;
         int result = super.hashCode();
-        result = prime * result + ((value == null) ? 0 : value.hashCode());
+        result = prime * result + ((server == null) ? 0 : server.hashCode());
         return result;
+    }
+
+    @Override
+    public void buildEnvVars(AbstractBuild<?, ?> build, EnvVars env) {
+        env.put("ENVIRONMENT", environ);
+        env.put("VERSION", version);
+        buildEnvVars(build, (Map<String, String>) env);
     }
 
     @Override
@@ -73,11 +82,11 @@ public class ServSelParameterValue extends ParameterValue {
             return false;
         }
         ServSelParameterValue other = (ServSelParameterValue) obj;
-        if (value == null) {
-            if (other.value != null) {
+        if (server == null) {
+            if (other.server != null) {
                 return false;
             }
-        } else if (!value.equals(other.value)) {
+        } else if (!server.equals(other.server) || !environ.equals(other.environ) || !version.equals(other.version)) {
             return false;
         }
         return true;
@@ -85,12 +94,12 @@ public class ServSelParameterValue extends ParameterValue {
 
     @Override
     public String toString() {
-        return "(ServSelParameterValue) " + getName() + "='" + value + "'";
+        return "(ServSelParameterValue) Server='" + server + "'\nVersion='" + version + "'\nEnvironment='" + environ + "'";
     }
 
     @Override
     public String getShortDescription() {
-        return name + '=' + value;
+        return name + '=' + server;
     }
 
 }

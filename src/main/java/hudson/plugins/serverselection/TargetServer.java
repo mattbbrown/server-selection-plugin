@@ -16,10 +16,19 @@ public class TargetServer {
     private String task;
     private String build;
     private String version;
+    private String shouldDeploy;
 
     public TargetServer(String name, String serverType) {
         this.name = name;
         this.serverType = serverType;
+    }
+
+    public String getShouldDeploy() {
+        return shouldDeploy;
+    }
+
+    public void setShouldDeploy(String shouldDeploy) {
+        this.shouldDeploy = shouldDeploy;
     }
 
     public String getName() {

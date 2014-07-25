@@ -43,14 +43,17 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                 } else {
                     tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
                 }
-                if (tjp != null) {
+                if (tjp != null && tjp.getThrottleEnabled()) {
                     TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
                     String targetName = targetServer != null ? targetServer.getName() : null;
+                    String shouldDeploy = targetServer != null ? targetServer.getShouldDeploy() : null;
                     LOGGER.log(Level.SEVERE, "target: {0}", targetName);
-                    if (targetName != null) {
-                        env.put("TARGET", targetName);
-                        env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                    env.put("TARGET", targetName);
+                    env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                    if (shouldDeploy != null) {
+                        env.put("SHOULD_DEPLOY", shouldDeploy);
                     }
+
                 }
             }
         };
@@ -65,10 +68,13 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         } else {
             tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (tjp != null && !(project instanceof MatrixProject)) {
+        if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             String target = descriptor.UsingServer(getShortName(build));
             descriptor.putFullAssignments(nameNoSpaces(build), target);
             listener.getLogger().println("[Server Selector] Target server set to " + target);
+            if (descriptor.getTargetServer(target).getShouldDeploy().equals("yes")) {
+                listener.getLogger().println("[Server Selector] Target server set to be redeployed");
+            }
         }
     }
 
@@ -81,7 +87,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         } else {
             tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (tjp != null && !(project instanceof MatrixProject)) {
+        if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
             String targetName = targetServer.getName();
             String getLock = (String) build.getBuildVariables().get("GET_LOCK");
