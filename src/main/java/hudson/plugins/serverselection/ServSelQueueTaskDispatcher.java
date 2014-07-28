@@ -3,7 +3,6 @@ package hudson.plugins.serverselection;
 import hudson.Extension;
 import hudson.matrix.MatrixConfiguration;
 import hudson.matrix.MatrixProject;
-import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Queue;
 import hudson.model.Queue.Task;
@@ -35,6 +34,9 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
             if (params.contains("TARGET=")) {
                 int indOfTarget = params.indexOf("TARGET=") + 7;
                 specificServer = params.substring(indOfTarget, params.indexOf("\n", indOfTarget));
+            }
+            if (task instanceof MatrixConfiguration && task.getFullDisplayName().toLowerCase().contains("deploy")) {
+                specificServer = task.getDisplayName();
             }
             ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
             serverTaken = descriptor.assignServer(targetServerType, item, specificServer);

@@ -46,11 +46,13 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                 if (tjp != null && tjp.getThrottleEnabled()) {
                     TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
                     String targetName = targetServer != null ? targetServer.getName() : null;
-                    LOGGER.log(Level.SEVERE, "target: {0}", targetName);
-                    if (targetName != null) {
-                        env.put("TARGET", targetName);
-                        env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                    String shouldDeploy = targetServer != null ? targetServer.getShouldDeploy() : null;
+                    env.put("TARGET", targetName);
+                    env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                    if (shouldDeploy != null) {
+                        env.put("SHOULD_DEPLOY", shouldDeploy);
                     }
+
                 }
             }
         };
@@ -75,6 +77,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
     @Override
     public void onCompleted(AbstractBuild build, TaskListener listener) {
         AbstractProject project = build.getProject();
+        Map<String, String> buildVars = build.getBuildVariables();
         ServSelJobProperty tjp;
         if (project instanceof MatrixConfiguration) {
             tjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
@@ -83,13 +86,32 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         }
         if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
-            String targetName = targetServer.getName();
-            String getLock = (String) build.getBuildVariables().get("GET_LOCK");
-            if (getLock == null || getLock.toLowerCase().equals("yes")) {
-                listener.getLogger().println("[Server Selector] Releasing server " + targetName);
-                descriptor.releaseServer(targetName);
+            if (targetServer != null) {
+                String targetName = targetServer.getName();
+                if (build.getFullDisplayName().contains("Deploy")) {
+                    if (build.getResult().isBetterOrEqualTo(Result.SUCCESS)) {
+                        targetServer.setBuild(buildVars.get("ENVIRONMENT"));
+                        targetServer.setVersion(buildVars.get("VERSION"));
+                        targetServer.setLastDeployPassed(true);
+                    } else {
+                        targetServer.setLastDeployPassed(false);
+                    }
+                }
+                String getLock = (String) buildVars.get("GET_LOCK");
+                if (getLock == null || getLock.toLowerCase().equals("false")) {
+                    listener.getLogger().println("[Server Selector] Releasing server " + targetName);
+                    descriptor.releaseServer(targetName);
+                }
                 descriptor.removeFullAssignments(nameNoSpaces(build));
             }
+        }
+    }
+
+    public void onFinalized(AbstractBuild<?, ?> build) {
+        TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
+        if (targetServer != null) {
+            descriptor.releaseServer(targetServer.getName());
+            descriptor.removeFullAssignments(nameNoSpaces(build));
         }
     }
 

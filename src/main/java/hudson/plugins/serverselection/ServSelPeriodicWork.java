@@ -45,7 +45,10 @@ public class ServSelPeriodicWork extends PeriodicWork {
                         LOGGER.log(Level.SEVERE, "Full call: {0}", fullCmd);
 
                         Runtime R = Runtime.getRuntime();
-                        p = R.exec(fullCmd);
+                        String command = "rvm use ruby-1.9.3-p547@knife do knife exec -E \"nodes.find(:tags =>\\\"SA_Windows_2012\\\"){|n|puts(n.name+\\\",\\\"+n.environment+\\\",\\\"+n[\\\"vht\\\"][\\\"installed_version\\\"]+\\\",\\\"+n.tags.include?(\\\"in_use\\\").to_s)}\"";                        
+                        String test = "rvm use ruby-1.9.3-p547@knife do knife exec -E \"puts(\\\"HelloWorld\\\")\"";
+                        String[] cmd = {"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"};
+                        p = R.exec(cmd);
                         BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
                         BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
                         p.waitFor();
@@ -60,7 +63,8 @@ public class ServSelPeriodicWork extends PeriodicWork {
                             if (targetServer == null) {
                                 targetServer = new TargetServer(server, targetServerType);
                             }
-                            targetServer.setEverything(targetServerType, build, version, inUse);
+                            targetServer.setBuild("master");
+                            targetServer.setVersion("not-latest");
                             descriptor.setTargetServer(targetServer);
                             serverList.add(targetServer);
                         }
@@ -87,5 +91,5 @@ public class ServSelPeriodicWork extends PeriodicWork {
         return 0;
     }
 
-    private static final Logger LOGGER = Logger.getLogger(ServSelQueueTaskDispatcher.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(ServSelPeriodicWork.class.getName());
 }

@@ -16,20 +16,30 @@ public class TargetServer {
     private String task;
     private String build;
     private String version;
-    private String inUse;
+    private String shouldDeploy;
+    private boolean lastDeployPassed;
 
     public TargetServer(String name, String serverType) {
         this.name = name;
         this.serverType = serverType;
     }
-    
-    public void setEverything(String serverType, String build, String version, String inUse){
-        this.serverType = serverType;
-        this.build = build;
-        this.version = version;
-        this.inUse = inUse;
+
+    public boolean getLastDeployPassed() {
+        return lastDeployPassed;
     }
-    
+
+    public void setLastDeployPassed(boolean lastDeployPassed) {
+        this.lastDeployPassed = lastDeployPassed;
+    }
+
+    public String getShouldDeploy() {
+        return shouldDeploy;
+    }
+
+    public void setShouldDeploy(String shouldDeploy) {
+        this.shouldDeploy = shouldDeploy;
+    }
+
     public String getName() {
         return name;
     }

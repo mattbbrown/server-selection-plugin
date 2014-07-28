@@ -41,23 +41,23 @@ import java.util.Map;
 public class ServSelParameterValue extends ParameterValue {
 
     @Exported(visibility = 4)
-    public final String value;
+    public final String server;
 
     @DataBoundConstructor
-    public ServSelParameterValue(String name, String value) {
-        this(name, value, null);
+    public ServSelParameterValue(String name, String server) {
+        this(name, server, null);
     }
 
-    public ServSelParameterValue(String name, String value, String description) {
+    public ServSelParameterValue(String name, String server, String description) {
         super(name, description);
-        this.value = value;
+        this.server = server;
     }
 
     @Override
     public int hashCode() {
         final int prime = 31;
         int result = super.hashCode();
-        result = prime * result + ((value == null) ? 0 : value.hashCode());
+        result = prime * result + ((server == null) ? 0 : server.hashCode());
         return result;
     }
 
@@ -73,11 +73,11 @@ public class ServSelParameterValue extends ParameterValue {
             return false;
         }
         ServSelParameterValue other = (ServSelParameterValue) obj;
-        if (value == null) {
-            if (other.value != null) {
+        if (server == null) {
+            if (other.server != null) {
                 return false;
             }
-        } else if (!value.equals(other.value)) {
+        } else if (!server.equals(other.server)) {
             return false;
         }
         return true;
@@ -85,12 +85,12 @@ public class ServSelParameterValue extends ParameterValue {
 
     @Override
     public String toString() {
-        return "(ServSelParameterValue) " + getName() + "='" + value + "'";
+        return "(ServSelParameterValue) Server='" + server + "'";
     }
 
     @Override
     public String getShortDescription() {
-        return name + '=' + value;
+        return name + '=' + server;
     }
 
 }

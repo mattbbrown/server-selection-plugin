@@ -26,7 +26,7 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
 
     public static final String CHOICES_DELIMETER = "\\r?\\n";
 
-    private final List<String> choices;
+    private final List<String> servers;
     private final String defaultValue;
 
     public static boolean areValidChoices(String choices) {
@@ -38,13 +38,13 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     public ServSelParameterDefinition() {
         super("TARGET", "Note: selecting a specific server will override the Target Server Type and the build/version parameters");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
-        choices = descriptor.getAllServersList();
+        servers = descriptor.getAllServersList();
         defaultValue = null;
     }
 
-    private ServSelParameterDefinition(String name, List<String> choices, String defaultValue, String description) {
+    private ServSelParameterDefinition(String name, List<String> servers, String defaultValue, String description) {
         super(name, description);
-        this.choices = choices;
+        this.servers = servers;
         this.defaultValue = defaultValue;
     }
 
@@ -52,29 +52,29 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     public ParameterDefinition copyWithDefaultValue(ParameterValue defaultValue) {
         if (defaultValue instanceof StringParameterValue) {
             StringParameterValue value = (StringParameterValue) defaultValue;
-            return new ServSelParameterDefinition(getName(), choices, value.value, getDescription());
+            return new ServSelParameterDefinition(getName(), servers, value.value, getDescription());
         } else {
             return this;
         }
     }
 
     @Exported
-    public List<String> getChoices() {
-        return choices;
+    public List<String> getServers() {
+        return servers;
     }
 
     public String getChoicesText() {
-        return StringUtils.join(choices, "\n");
+        return StringUtils.join(servers, "\n");
     }
 
     @Override
     public StringParameterValue getDefaultParameterValue() {
-        return new StringParameterValue(getName(), defaultValue == null ? choices.get(0) : defaultValue, getDescription());
+        return new StringParameterValue(getName(), defaultValue == null ? servers.get(0) : defaultValue, getDescription());
     }
 
     private ServSelParameterValue checkValue(ServSelParameterValue value) {
-        if (!choices.contains(value.value)) {
-            throw new IllegalArgumentException("Illegal choice: " + value.value);
+        if (!servers.contains(value.server)) {
+            throw new IllegalArgumentException("Illegal choice: " + value.server);
         }
         return value;
     }
@@ -88,8 +88,8 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
-    public ServSelParameterValue createValue(String value) {
-        return checkValue(new ServSelParameterValue(getName(), value, getDescription()));
+    public ServSelParameterValue createValue(String server) {
+        return checkValue(new ServSelParameterValue(getName(), server, getDescription()));
     }
 
     @Extension

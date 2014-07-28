@@ -2,7 +2,7 @@
          xmlns:t="/lib/hudson" xmlns:f="/lib/form">
     <f:section title="Server Selection">         
             <f:entry title="Server Types" field="categories">
-                <f:repeatable field="categories" add="${%Add}" minimum="0">
+                <f:repeatable field="categories" add="${%Add Server Type}" minimum="0">
                     <table width="100%">
                         <f:entry title="Name:" field="categoryName">
                             <f:textbox />

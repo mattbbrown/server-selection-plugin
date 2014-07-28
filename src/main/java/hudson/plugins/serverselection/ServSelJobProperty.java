@@ -15,16 +15,11 @@ import hudson.util.ListBoxModel;
 import hudson.Util;
 import hudson.matrix.MatrixBuild;
 import hudson.matrix.MatrixProject;
-import hudson.model.AbstractBuild;
-import hudson.model.Cause;
-import hudson.model.Hudson;
 import hudson.model.Queue;
 import hudson.model.Queue.Task;
-import hudson.model.TaskListener;
 import java.io.IOException;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -306,86 +301,100 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         }
 
         public synchronized String assignServer(String targetServerType, Queue.Item item, String specificTarget) throws IOException, InterruptedException {
-            Task task = item.task;
             String params = item.getParams().concat("\n");
-            //String build = null, version = null;
+            String shouldDeploy = "false";
 
             if (items.contains(item.id)) {
                 items.remove(items.indexOf(item.id));
                 return "Server Already Selected";
             }
-            LOGGER.log(Level.SEVERE, "item parameters for {0}: {1}", new Object[]{item.id, item.getParams()});
-            if (params.toLowerCase().contains("get_lock=no")) {
-                assign(specificTarget, task);
+            if (params.toLowerCase().contains("should_deploy=true")) {
+                shouldDeploy = "true";
+            }
+            if (params.toLowerCase().contains("get_lock=false")) {
+                assign(specificTarget, item.task, shouldDeploy);
                 items.add(item.id);
                 return specificTarget;
             }
-            /*
-             SPECIFIC BUILD/VERSION CODE FOR NEXT VERSION
-             if (params.contains("BUILD=")) {
-             int indOfBuild = params.indexOf("BUILD=") + 7;
-             build = params.substring(indOfBuild, params.indexOf("\n", indOfBuild));
-             }
 
-             if (params.contains("VERSION=")) {
-             int indOfVersion = params.indexOf("VERSION=") + 7;
-             version = params.substring(indOfVersion, params.indexOf("\n", indOfVersion));
-             }
-             */
-            String freeServer = null;
+            String freeServer;
             if (specificTarget.equals("First Available Server")) {
-                List<TargetServer> servers = allFreeServers.get(targetServerType);
-                if (servers == null) {
-                    allFreeServers.put(targetServerType, allServersByType.get(targetServerType));
-                    servers = allFreeServers.get(targetServerType);
-                }
-                if (!servers.isEmpty()) {
-                    freeServer = servers.remove(0).getName();
-                    assign(freeServer, task);
-                    items.add(item.id);
-                }
-                /*
-                 SPECIFIC BUILD/VERSION CODE FOR NEXT VERSION
-                 for (TargetServer targetServer : servers) {
-                 boolean buildGood = true;
-                 boolean versionGood = true;
-                 if (build != null) {
-                 buildGood = targetServer.getBuild().equals(build);
-                 }
-                 if (version != null) {
-                 versionGood = targetServer.getVersion().equals(version);
-                 }
-                 if (buildGood && versionGood) {
-                 freeServer = servers.get(servers.indexOf(targetServer)).getName();
-                 assign(freeServer, task);
-                 items.add(item.id);
-                 break;
-                 }
-                 }
-                 */
+                freeServer = assignFirstAvailableServer(item, targetServerType, shouldDeploy);
             } else {
-                for (ThrottleCategory category : categories) {
-                    String serverType = category.getCategoryName();
-                    List<TargetServer> servers = allFreeServers.get(serverType);
-                    if (servers == null) {
-                        allFreeServers.put(serverType, allServersByType.get(serverType));
-                        servers = allFreeServers.get(serverType);
-                    }
-                    for (TargetServer targetServer : servers) {
-                        if (targetServer.getName().equals(specificTarget)) {
-                            freeServer = specificTarget;
-                            servers.remove(targetServer);
-                            assign(freeServer, task);
-                            items.add(item.id);
-                            break;
-                        }
+                freeServer = assignSpecificServer(item, specificTarget, shouldDeploy);
+            }
+            return freeServer;
+        }
+
+        public String assignSpecificServer(Queue.Item item, String specificTarget, String shouldDeploy) {
+            String freeServer = null;
+            for (ThrottleCategory category : categories) {
+                String serverType = category.getCategoryName();
+                List<TargetServer> servers = allFreeServers.get(serverType);
+                if (servers == null) {
+                    allFreeServers.put(serverType, allServersByType.get(serverType));
+                    servers = allFreeServers.get(serverType);
+                }
+                for (TargetServer targetServer : servers) {
+                    if (targetServer.getName().equals(specificTarget)) {
+                        freeServer = specificTarget;
+                        servers.remove(targetServer);
+                        assign(freeServer, item.task, shouldDeploy);
+                        items.add(item.id);
+                        break;
                     }
                 }
             }
             return freeServer;
         }
 
-        public void assign(String freeServer, Task task) {
+        public String assignFirstAvailableServer(Queue.Item item, String targetServerType, String shouldDeploy) {
+            Task task = item.task;
+            String freeServer = null, environ = null, version = null;
+            String params = item.getParams().concat("\n");
+            List<TargetServer> servers = allFreeServers.get(targetServerType);
+            if (servers == null) {
+                allFreeServers.put(targetServerType, allServersByType.get(targetServerType));
+                servers = allFreeServers.get(targetServerType);
+            }
+            if (params.contains("ENVIRONMENT=")) {
+                int indOfEnviron = params.indexOf("ENVIRONMENT=") + 12;
+                environ = params.substring(indOfEnviron, params.indexOf("\n", indOfEnviron));
+            }
+
+            if (params.contains("VERSION=")) {
+                int indOfVersion = params.indexOf("VERSION=") + 8;
+                version = params.substring(indOfVersion, params.indexOf("\n", indOfVersion));
+            }
+            boolean foundServer = false;
+            for (TargetServer targetServer : servers) {
+                boolean environGood = false;
+                boolean versionGood = false;
+                if (environ != null) {
+                    environGood = targetServer.getBuild().equals(environ);
+                }
+                if (version != null) {
+                    versionGood = targetServer.getVersion().equals(version);
+                }
+                if (environGood && versionGood) {
+                    foundServer = true;
+                    freeServer = targetServer.getName();
+                    servers.remove(targetServer);
+                    assign(freeServer, task, shouldDeploy);
+                    items.add(item.id);
+                    break;
+                }
+            }
+            if (!foundServer && !servers.isEmpty()) {
+                freeServer = servers.remove(0).getName();
+                assign(freeServer, task, "true");
+                items.add(item.id);
+            }
+            return freeServer;
+        }
+
+
+        public void assign(String freeServer, Task task, String shouldDeploy) {
             int num = 1;
             boolean foundTask = false;
             String taskName = null;
@@ -397,9 +406,8 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                     num++;
                 }
             }
-            LOGGER.log(Level.SEVERE, "task name: {0}", taskName);
             taskAssignments.put(taskName, freeServer);
-            LOGGER.log(Level.SEVERE, "taskAssignments: {0}", taskAssignments);
+            getTargetServer(freeServer).setShouldDeploy(shouldDeploy);
         }
 
         public void setServers(String targetServerType, List<TargetServer> servers) {
