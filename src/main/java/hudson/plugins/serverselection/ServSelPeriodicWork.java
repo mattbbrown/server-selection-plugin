@@ -39,9 +39,10 @@ public class ServSelPeriodicWork extends PeriodicWork {
                     Process p;
                     try {
                         Runtime R = Runtime.getRuntime();
-                        String command = "rvm use ruby-1.9.3-p547@knife do knife exec -E \"nodes.find(:tags =>\\\"SA_Windows_2012\\\"){|n|puts(n.name+\\\",\\\"+n.environment+\\\",\\\"+n[\\\"vht\\\"][\\\"installed_version\\\"]+\\\",\\\"+n.tags.include?(\\\"in_use\\\").to_s)}\"";
-                        p = R.exec(command);
-                        //p = R.exec(new String[]{"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"});
+                        String command = "rvm use ruby-1.9.3-p547@knife do knife exec -E \"nodes.find(:tags =>\\\"SA_Windows_2012\\\"){|n|puts(n.name+\\\",\\\"+n.environment+\\\",\\\"+n[\\\"vht\\\"][\\\"installed_version\\\"]+\\\",\\\"+n.tags.include?(\\\"in_use\\\").to_s)}\"";                        
+                        String test = "rvm use ruby-1.9.3-p547@knife do knife exec -E \"puts(\\\"HelloWorld\\\")\"";
+                        String[] cmd = {"rvm", "ruby-1.9.3-p547@knife", "do", "knife", "search", "tags:" + targetServerType, "-i"};
+                        p = R.exec(cmd);
                         BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
                         p.waitFor();
 
@@ -53,6 +54,8 @@ public class ServSelPeriodicWork extends PeriodicWork {
                             if (targetServer == null) {
                                 targetServer = new TargetServer(server, targetServerType);
                             }
+                            targetServer.setBuild("master");
+                            targetServer.setVersion("not-latest");
                             targetServer.setServerType(targetServerType);
                             descriptor.setTargetServer(targetServer);
                             serverList.add(targetServer);
@@ -72,5 +75,5 @@ public class ServSelPeriodicWork extends PeriodicWork {
         return 0;
     }
 
-    private static final Logger LOGGER = Logger.getLogger(ServSelQueueTaskDispatcher.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(ServSelPeriodicWork.class.getName());
 }

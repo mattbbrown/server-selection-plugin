@@ -41,18 +41,16 @@ import java.util.Map;
 public class ServSelParameterValue extends ParameterValue {
 
     @Exported(visibility = 4)
-    public final String server, environ, version;
+    public final String server;
 
     @DataBoundConstructor
-    public ServSelParameterValue(String name, String server, String environ, String version) {
-        this(name, server, environ, version, null);
+    public ServSelParameterValue(String name, String server) {
+        this(name, server, null);
     }
 
-    public ServSelParameterValue(String name, String server, String environ, String version, String description) {
+    public ServSelParameterValue(String name, String server, String description) {
         super(name, description);
         this.server = server;
-        this.environ = environ;
-        this.version = version;
     }
 
     @Override
@@ -61,13 +59,6 @@ public class ServSelParameterValue extends ParameterValue {
         int result = super.hashCode();
         result = prime * result + ((server == null) ? 0 : server.hashCode());
         return result;
-    }
-
-    @Override
-    public void buildEnvVars(AbstractBuild<?, ?> build, EnvVars env) {
-        env.put("ENVIRONMENT", environ);
-        env.put("VERSION", version);
-        buildEnvVars(build, (Map<String, String>) env);
     }
 
     @Override
@@ -86,7 +77,7 @@ public class ServSelParameterValue extends ParameterValue {
             if (other.server != null) {
                 return false;
             }
-        } else if (!server.equals(other.server) || !environ.equals(other.environ) || !version.equals(other.version)) {
+        } else if (!server.equals(other.server)) {
             return false;
         }
         return true;
@@ -94,7 +85,7 @@ public class ServSelParameterValue extends ParameterValue {
 
     @Override
     public String toString() {
-        return "(ServSelParameterValue) Server='" + server + "'\nVersion='" + version + "'\nEnvironment='" + environ + "'";
+        return "(ServSelParameterValue) Server='" + server + "'";
     }
 
     @Override

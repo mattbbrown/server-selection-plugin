@@ -17,10 +17,19 @@ public class TargetServer {
     private String build;
     private String version;
     private String shouldDeploy;
+    private boolean lastDeployPassed;
 
     public TargetServer(String name, String serverType) {
         this.name = name;
         this.serverType = serverType;
+    }
+
+    public boolean getLastDeployPassed() {
+        return lastDeployPassed;
+    }
+
+    public void setLastDeployPassed(boolean lastDeployPassed) {
+        this.lastDeployPassed = lastDeployPassed;
     }
 
     public String getShouldDeploy() {

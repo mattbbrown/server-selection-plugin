@@ -1,17 +1,22 @@
 package hudson.plugins.serverselection;
 
+import hudson.util.FormValidation;
+import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.export.Exported;
 import org.apache.commons.lang.StringUtils;
 import net.sf.json.JSONObject;
 import hudson.Extension;
+import hudson.model.AbstractProject;
 import hudson.model.ParameterDefinition;
 import hudson.model.ParameterValue;
 import hudson.model.SimpleParameterDefinition;
 import hudson.model.StringParameterValue;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Arrays;
 import jenkins.model.Jenkins;
 
 /**
@@ -22,7 +27,6 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     public static final String CHOICES_DELIMETER = "\\r?\\n";
 
     private final List<String> servers;
-    private final List<String> environments;
     private final String defaultValue;
 
     public static boolean areValidChoices(String choices) {
@@ -32,25 +36,23 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
 
     @DataBoundConstructor
     public ServSelParameterDefinition() {
-        super("Server Selection", "Note: selecting a specific server will override the Target Server Type and the build/version parameters");
+        super("TARGET", "Note: selecting a specific server will override the Target Server Type and the build/version parameters");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
         servers = descriptor.getAllServersList();
-        environments = descriptor.getEnvironments();
         defaultValue = null;
     }
 
-    private ServSelParameterDefinition(String name, List<String> servers, List<String> environments, String defaultValue, String description) {
+    private ServSelParameterDefinition(String name, List<String> servers, String defaultValue, String description) {
         super(name, description);
         this.servers = servers;
         this.defaultValue = defaultValue;
-        this.environments = environments;
     }
 
     @Override
     public ParameterDefinition copyWithDefaultValue(ParameterValue defaultValue) {
         if (defaultValue instanceof StringParameterValue) {
             StringParameterValue value = (StringParameterValue) defaultValue;
-            return new ServSelParameterDefinition(getName(), servers, environments, value.value, getDescription());
+            return new ServSelParameterDefinition(getName(), servers, value.value, getDescription());
         } else {
             return this;
         }
@@ -61,6 +63,10 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
         return servers;
     }
 
+    public String getChoicesText() {
+        return StringUtils.join(servers, "\n");
+    }
+
     @Override
     public StringParameterValue getDefaultParameterValue() {
         return new StringParameterValue(getName(), defaultValue == null ? servers.get(0) : defaultValue, getDescription());
@@ -69,9 +75,6 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     private ServSelParameterValue checkValue(ServSelParameterValue value) {
         if (!servers.contains(value.server)) {
             throw new IllegalArgumentException("Illegal choice: " + value.server);
-        }
-        if (!environments.contains(value.environ)) {
-            throw new IllegalArgumentException("Illegal choice: " + value.environ);
         }
         return value;
     }
@@ -85,8 +88,8 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
-    public ServSelParameterValue createValue(String value) {
-        return checkValue(new ServSelParameterValue(getName(), value, null, null, getDescription()));
+    public ServSelParameterValue createValue(String server) {
+        return checkValue(new ServSelParameterValue(getName(), server, getDescription()));
     }
 
     @Extension

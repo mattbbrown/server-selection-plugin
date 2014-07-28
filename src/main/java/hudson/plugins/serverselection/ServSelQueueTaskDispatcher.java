@@ -35,6 +35,9 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
                 int indOfTarget = params.indexOf("TARGET=") + 7;
                 specificServer = params.substring(indOfTarget, params.indexOf("\n", indOfTarget));
             }
+            if (task instanceof MatrixConfiguration && task.getFullDisplayName().toLowerCase().contains("deploy")) {
+                specificServer = task.getDisplayName();
+            }
             ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
             serverTaken = descriptor.assignServer(targetServerType, item, specificServer);
             if (serverTaken == null && !specificServer.equals("First Available Server")) {

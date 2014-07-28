@@ -9,23 +9,7 @@ and open the template in the editor.
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define"
          xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form"
          xmlns:i="jelly:fmt" xmlns:p="/lib/hudson/project">
-    <f:entry title="${%Environment}">
-        <div name="parameter">
-            <input type="hidden" name="name" value="${%ENVIRONMENT}" />
-            <select name="environ">
-                <j:forEach var="environ" items="${it.environments}">
-                    <f:option selected="${it.environ==environ}">${environ}</f:option>
-                </j:forEach>
-            </select>
-        </div>
-    </f:entry>
-    <f:entry title="${%Version}">
-        <div name="parameter">
-            <input type="hidden" name="name" value="${VERSION}" />
-            <f:textarea name="value" value="${%latest}"/>
-        </div>
-    </f:entry>
-    <f:entry title="${%Target Server}" description="${it.formattedDescription}">
+    <f:entry title="${it.name}" description="${it.formattedDescription}">
         <div name="parameter">
             <input type="hidden" name="name" value="${it.name}" />
             <select name="server">
