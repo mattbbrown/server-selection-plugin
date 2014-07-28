@@ -61,6 +61,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
     @Override
     public void onStarted(AbstractBuild build, TaskListener listener) {
         AbstractProject project = build.getProject();
+        Map<String,String> envVars = build.getBuildVariables();
         ServSelJobProperty tjp;
         if (project instanceof MatrixConfiguration) {
             tjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
@@ -71,6 +72,8 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
             String target = descriptor.UsingServer(getShortName(build));
             descriptor.putFullAssignments(nameNoSpaces(build), target);
             listener.getLogger().println("[Server Selector] Target server set to " + target);
+            listener.getLogger().println("[Server Selector] Version set to " + envVars.get("VERSION"));
+            listener.getLogger().println("[Server Selector] Environment set to " + envVars.get("ENVIRONMENT"));
         }
     }
 
@@ -90,8 +93,6 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                 String targetName = targetServer.getName();
                 if (build.getFullDisplayName().contains("Deploy")) {
                     if (build.getResult().isBetterOrEqualTo(Result.SUCCESS)) {
-                        targetServer.setBuild(buildVars.get("ENVIRONMENT"));
-                        targetServer.setVersion(buildVars.get("VERSION"));
                         targetServer.setLastDeployPassed(true);
                     } else {
                         targetServer.setLastDeployPassed(false);

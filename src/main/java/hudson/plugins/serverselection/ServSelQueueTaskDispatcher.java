@@ -17,7 +17,7 @@ import javax.annotation.Nonnull;
 
 @Extension
 public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
-    
+
     @Override
     public CauseOfBlockage canRun(Queue.Item item) {
         try {
@@ -65,17 +65,10 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
             return false;
         }
 
-        ServSelMatrixProjectOptions matrixOptions = tjp.getMatrixOptions();
-        if (matrixOptions == null) {
-            matrixOptions = ServSelMatrixProjectOptions.DEFAULT;
-        }
-        if (!matrixOptions.isThrottleMatrixConfigurations() && task instanceof MatrixConfiguration) {
+        if (task instanceof MatrixProject) {
             return false;
         }
-        if (!matrixOptions.isThrottleMatrixBuilds() && task instanceof MatrixProject) {
-            return false;
-        }
-
+        
         return true;
     }
 

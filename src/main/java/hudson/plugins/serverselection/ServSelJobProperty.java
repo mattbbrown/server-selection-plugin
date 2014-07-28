@@ -235,6 +235,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         private List<String> allServersList = updateServerList();
         private List<Integer> items = new ArrayList<Integer>();
         private boolean simple;
+        private Map<String, String> latestByEnviron = new HashMap<String, String>();
         private Map<String, TargetServer> allTargetServers = new HashMap<String, TargetServer>();
         private Map<String, List<TargetServer>> allServersByType = new HashMap<String, List<TargetServer>>();
         private Map<String, List<TargetServer>> allFreeServers = new HashMap<String, List<TargetServer>>();
@@ -298,6 +299,14 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public TargetServer getFullAssignments(String fullName) {
             return fullNameAssigns.get(fullName);
+        }
+
+        public String getLatest(String environ) {
+            return latestByEnviron.get(environ);
+        }
+
+        public void setLatest(String environ, String latest) {
+            latestByEnviron.put(environ, latest);
         }
 
         public synchronized String assignServer(String targetServerType, Queue.Item item, String specificTarget) throws IOException, InterruptedException {
@@ -365,18 +374,23 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             if (params.contains("VERSION=")) {
                 int indOfVersion = params.indexOf("VERSION=") + 8;
                 version = params.substring(indOfVersion, params.indexOf("\n", indOfVersion));
+                if (version.equals("latest") && environ != null) {
+                    version = getLatest(environ);
+                }
+
             }
             boolean foundServer = false;
             for (TargetServer targetServer : servers) {
                 boolean environGood = false;
                 boolean versionGood = false;
+                boolean in_use = targetServer.getInUse().equals("true");
                 if (environ != null) {
                     environGood = targetServer.getBuild().equals(environ);
                 }
                 if (version != null) {
                     versionGood = targetServer.getVersion().equals(version);
                 }
-                if (environGood && versionGood) {
+                if (environGood && versionGood && !in_use) {
                     foundServer = true;
                     freeServer = targetServer.getName();
                     servers.remove(targetServer);
@@ -385,14 +399,19 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                     break;
                 }
             }
-            if (!foundServer && !servers.isEmpty()) {
-                freeServer = servers.remove(0).getName();
-                assign(freeServer, task, "true");
-                items.add(item.id);
+            if (!foundServer) {
+                for (TargetServer targetServer : servers) {
+                    boolean in_use = targetServer.getInUse().equals("true");
+                    if (!in_use) {
+                        freeServer = targetServer.getName();
+                        assign(freeServer, task, "true");
+                        items.add(item.id);
+                        break;
+                    }
+                }
             }
             return freeServer;
         }
-
 
         public void assign(String freeServer, Task task, String shouldDeploy) {
             int num = 1;

@@ -17,11 +17,20 @@ public class TargetServer {
     private String build;
     private String version;
     private String shouldDeploy;
+    private String inUse;
     private boolean lastDeployPassed;
 
     public TargetServer(String name, String serverType) {
         this.name = name;
         this.serverType = serverType;
+    }
+
+    public void setInUse(String inUse) {
+        this.inUse = inUse;
+    }
+
+    public String getInUse() {
+        return inUse;
     }
 
     public boolean getLastDeployPassed() {
