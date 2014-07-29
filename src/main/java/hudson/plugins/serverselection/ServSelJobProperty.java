@@ -404,6 +404,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                     boolean in_use = targetServer.getInUse().equals("true");
                     if (!in_use) {
                         freeServer = targetServer.getName();
+                        servers.remove(targetServer);
                         assign(freeServer, task, "true");
                         items.add(item.id);
                         break;
