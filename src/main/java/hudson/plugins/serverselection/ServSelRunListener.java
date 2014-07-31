@@ -47,10 +47,12 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                     TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
                     String targetName = targetServer != null ? targetServer.getName() : null;
                     String shouldDeploy = targetServer != null ? targetServer.getShouldDeploy() : null;
-                    env.put("TARGET", targetName);
-                    env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                    if (targetName != null) {
+                        env.put("TARGET", targetName);
+                        env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                    }
                     if (shouldDeploy != null) {
-                        env.put("SHOULD_DEPLOY", shouldDeploy);
+                        env.put("DEPLOY", shouldDeploy);
                     }
 
                 }
@@ -61,7 +63,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
     @Override
     public void onStarted(AbstractBuild build, TaskListener listener) {
         AbstractProject project = build.getProject();
-        Map<String,String> envVars = build.getBuildVariables();
+        Map<String, String> envVars = build.getBuildVariables();
         ServSelJobProperty tjp;
         if (project instanceof MatrixConfiguration) {
             tjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
@@ -70,6 +72,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         }
         if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             String target = descriptor.UsingServer(getShortName(build));
+            descriptor.getTargetServer(target).setTask(build.getFullDisplayName());
             descriptor.putFullAssignments(nameNoSpaces(build), target);
             listener.getLogger().println("[Server Selector] Target server set to " + target);
             listener.getLogger().println("[Server Selector] Version set to " + envVars.get("VERSION"));

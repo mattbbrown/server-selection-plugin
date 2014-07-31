@@ -17,12 +17,10 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import jenkins.model.Jenkins;
 
 /**
@@ -34,7 +32,7 @@ public class ServSelPeriodicWork extends PeriodicWork {
 
     @Override
     public long getRecurrencePeriod() {
-        return TimeUnit2.MINUTES.toMillis(5);
+        return TimeUnit2.MINUTES.toMillis(1);
     }
 
     @Override
@@ -47,12 +45,15 @@ public class ServSelPeriodicWork extends PeriodicWork {
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
         if (descriptor != null) {
             updateServerList(descriptor);
+            updateEnvironmentList(descriptor);
             updateLatestBuildInfo(descriptor);
         }
     }
 
-    private void updateServerList(ServSelJobProperty.DescriptorImpl descriptor) {
+    private void updateServerList(ServSelJobProperty.DescriptorImpl descriptor) throws IOException {
         List<String> serverTypes = descriptor.getCategoryNames();
+        boolean newServersAdded = false;
+        List<String> newServers = new ArrayList<String>();
         if (serverTypes != null && !serverTypes.isEmpty()) {
             for (String targetServerType : serverTypes) {
                 List<TargetServer> serverList = new ArrayList<TargetServer>();
@@ -65,7 +66,10 @@ public class ServSelPeriodicWork extends PeriodicWork {
                         String server = info[0], build = info[1], version = info[2], inUse = info[3];
                         TargetServer targetServer = descriptor.getTargetServer(server);
                         if (targetServer == null) {
+                            newServersAdded = true;
+                            newServers.add(server);
                             targetServer = new TargetServer(server, targetServerType);
+
                         }
                         targetServer.setBuild(build);
                         targetServer.setVersion(version);
@@ -74,36 +78,70 @@ public class ServSelPeriodicWork extends PeriodicWork {
                         serverList.add(targetServer);
                     }
 
-                    LOGGER.log(Level.SEVERE, "[Server Selection] {0} servers from Chef: {1}", new Object[]{targetServerType, serverList});
                     descriptor.setServers(targetServerType, serverList);
                 } catch (Exception e) {
                     LOGGER.log(Level.SEVERE, "[Server Selection] Chef call exception raised: ", e);
                 }
             }
         }
+        String command = "nodes.all{|n|puts(n.name)}";
+        BufferedReader reader = createAndExecuteTempFile("jenkinsAllNodes.rb", command);
+        List<TargetServer> noTypeServers = new ArrayList<TargetServer>();
+        String server;
+        while ((server = reader.readLine()) != null) {
+            TargetServer targetServer = descriptor.getTargetServer(server);
+            if (targetServer == null) {
+                newServersAdded = true;
+                newServers.add(server);
+                targetServer = new TargetServer(server, "NoType");
+            }
+            if (targetServer.getServerType().equals("NoType")) {
+                descriptor.setTargetServer(targetServer);
+                noTypeServers.add(targetServer);
+            }
+        }
+        descriptor.setServers("NoType", noTypeServers);
+        if (newServersAdded) {
+            LOGGER.log(Level.INFO, "[Server Selection] New Servers Added: {1}", newServers);
+        }
+    }
+
+    private void updateEnvironmentList(ServSelJobProperty.DescriptorImpl descriptor) throws IOException {
+        String command = "environments.all {|e| puts e.name}";
+        BufferedReader reader = createAndExecuteTempFile("getEnvironments.rb", command);
+        String line;
+        List<String> environments = new ArrayList<String>();
+        while ((line = reader.readLine()) != null) {
+            if (line.charAt(0) != '_') {
+                environments.add(line);
+            }
+        }
+        descriptor.setEnvironments(environments);
     }
 
     private void updateLatestBuildInfo(ServSelJobProperty.DescriptorImpl descriptor) throws FileNotFoundException, IOException {
-        String[] environments = {"master", "build80"};
+        List<String> environments = descriptor.getEnvironments();
         for (String environ : environments) {
             String command = "environments.find(:name=>'" + environ + "'){|e|attr=e.default_attributes['vht'];puts(attr['build_folder']+','+attr['build_username']+','+attr['build_share'])unless(attr == nil)}";
             BufferedReader reader = createAndExecuteTempFile("jenkinsEnvChefCall.rb", command);
-            String line = reader.readLine();
-            String[] info = line.split(",");
-            String build_folder = info[0], build_username = info[1], build_share = info[2];
-            String build_location = "mnt/" + build_username.substring(0, build_username.indexOf("\\")) + "builds/" + build_folder + "/";
-            File file = new File(build_location);
-            final String regex = "\\d+\\.\\d+\\.\\d+\\.\\d+$";
-            String[] directories = file.list(new FilenameFilter() {
-                @Override
-                public boolean accept(File current, String name) {
-                    return (new File(current, name).isDirectory()) && name.matches(regex);
-                }
-            });
-            List<String> dirs = Arrays.asList(directories);
-            String latestBuild = dirs.get(dirs.size() - 1);
-            LOGGER.log(Level.SEVERE, "Setting {0} latest as {1}", new Object[]{environ, latestBuild});
-            descriptor.setLatest(environ, latestBuild);
+            if (reader != null) {
+                String line = reader.readLine();
+                String[] info = line.split(",");
+                String build_folder = info[0], build_username = info[1];
+                String build_location = "mnt/" + build_username.substring(0, build_username.indexOf("\\")) + "builds/" + build_folder + "/";
+                File file = new File(build_location);
+                final String regex = "\\d+\\.\\d+\\.\\d+\\.\\d+$";
+                String[] directories = file.list(new FilenameFilter() {
+                    @Override
+                    public boolean accept(File current, String name) {
+                        return (new File(current, name).isDirectory()) && name.matches(regex);
+                    }
+                });
+                List<String> dirs = Arrays.asList(directories);
+                String latestBuild = dirs.get(dirs.size() - 1);
+                LOGGER.log(Level.SEVERE, "Setting {0} latest as {1}", new Object[]{environ, latestBuild});
+                descriptor.setLatest(environ, latestBuild);
+            }
         }
     }
 
@@ -121,16 +159,20 @@ public class ServSelPeriodicWork extends PeriodicWork {
     }
 
     private BufferedReader executeTempFile(String filename) throws IOException {
-        Map<String, String> env = System.getenv();
-        String jenkins_home = env.get("JENKINS_HOME");
-        Process p = Runtime.getRuntime().exec("rvm use ruby-1.9.3-p547@knife do knife exec " + jenkins_home + "/" + filename);
-        BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
         try {
-            p.waitFor();
-        } catch (InterruptedException ex) {
-            Logger.getLogger(ServSelPeriodicWork.class.getName()).log(Level.SEVERE, null, ex);
+            Map<String, String> env = System.getenv();
+            String jenkins_home = env.get("JENKINS_HOME");
+            Process p = Runtime.getRuntime().exec("rvm use ruby-1.9.3-p547@knife do knife exec " + jenkins_home + "/" + filename);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            try {
+                p.waitFor();
+            } catch (InterruptedException ex) {
+                Logger.getLogger(ServSelPeriodicWork.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            return reader;
+        } catch (IOException e) {
+            return null;
         }
-        return reader;
     }
 
     private static final Logger LOGGER = Logger.getLogger(ServSelPeriodicWork.class.getName());

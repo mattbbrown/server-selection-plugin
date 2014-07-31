@@ -22,11 +22,11 @@ import jenkins.model.Jenkins;
 /**
  * @author huybrechts
  */
-public class ServSelParameterDefinition extends SimpleParameterDefinition {
+public class ServSelEnvParameterDefinition extends SimpleParameterDefinition {
 
     public static final String CHOICES_DELIMETER = "\\r?\\n";
 
-    private final List<String> servers;
+    private final List<String> environments;
     private final String defaultValue;
 
     public static boolean areValidChoices(String choices) {
@@ -35,16 +35,16 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     }
 
     @DataBoundConstructor
-    public ServSelParameterDefinition() {
-        super("TARGET", "Note: selecting a specific server will override the Target Server Type");
+    public ServSelEnvParameterDefinition() {
+        super("ENVIRONMENT");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
-        servers = descriptor.getAllServersList();
+        environments = descriptor.getEnvironments();
         defaultValue = null;
     }
 
-    private ServSelParameterDefinition(String name, List<String> servers, String defaultValue, String description) {
+    private ServSelEnvParameterDefinition(String name, List<String> environments, String defaultValue, String description) {
         super(name, description);
-        this.servers = servers;
+        this.environments = environments;
         this.defaultValue = defaultValue;
     }
 
@@ -52,44 +52,43 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     public ParameterDefinition copyWithDefaultValue(ParameterValue defaultValue) {
         if (defaultValue instanceof StringParameterValue) {
             StringParameterValue value = (StringParameterValue) defaultValue;
-            return new ServSelParameterDefinition(getName(), servers, value.value, getDescription());
+            return new ServSelEnvParameterDefinition(getName(), environments, value.value, getDescription());
         } else {
             return this;
         }
     }
 
     @Exported
-    public List<String> getServers() {
-        return servers;
+    public List<String> getEnvironments() {
+        return environments;
     }
 
     public String getChoicesText() {
-        return StringUtils.join(servers, "\n");
+        return StringUtils.join(environments, "\n");
     }
 
     @Override
     public StringParameterValue getDefaultParameterValue() {
-        return new StringParameterValue(getName(), defaultValue == null ? servers.get(0) : defaultValue, getDescription());
+        return new StringParameterValue(getName(), defaultValue == null ? environments.get(0) : defaultValue, getDescription());
     }
 
-    private ServSelParameterValue checkValue(ServSelParameterValue value) {
-        if (!servers.contains(value.server)) {
-            throw new IllegalArgumentException("Illegal choice: " + value.server);
+    private StringParameterValue checkValue(StringParameterValue value) {
+        if (!environments.contains(value.value)) {
+            throw new IllegalArgumentException("Illegal choice: " + value.value);
         }
         return value;
     }
 
     @Override
     public ParameterValue createValue(StaplerRequest req, JSONObject jo) {
-        ServSelParameterValue value = req.bindJSON(ServSelParameterValue.class, jo);
-
+        StringParameterValue value = req.bindJSON(StringParameterValue.class, jo);
         value.setDescription(getDescription());
         return checkValue(value);
     }
 
     @Override
-    public ServSelParameterValue createValue(String server) {
-        return checkValue(new ServSelParameterValue(getName(), server, getDescription()));
+    public StringParameterValue createValue(String server) {
+        return checkValue(new StringParameterValue(getName(), server, getDescription()));
     }
 
     @Extension

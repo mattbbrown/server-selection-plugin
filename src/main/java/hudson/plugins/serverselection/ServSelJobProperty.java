@@ -234,6 +234,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         private List<ThrottleCategory> categories = new ArrayList<ThrottleCategory>();
         private List<String> allServersList = updateServerList();
         private List<Integer> items = new ArrayList<Integer>();
+        private List<String> environments = new ArrayList<String>();
         private boolean simple;
         private Map<String, String> latestByEnviron = new HashMap<String, String>();
         private Map<String, TargetServer> allTargetServers = new HashMap<String, TargetServer>();
@@ -276,6 +277,13 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                     newAllServersList.add(servers.getName());
                 }
             }
+            String serverType = "NoType";
+            if (allServersByType != null && allServersByType.get(serverType) != null) {
+                List<TargetServer> serverOfType = allServersByType.get(serverType);
+                for (TargetServer servers : serverOfType) {
+                    newAllServersList.add(servers.getName());
+                }
+            }
             return newAllServersList;
         }
 
@@ -309,9 +317,22 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             latestByEnviron.put(environ, latest);
         }
 
+        public List<String> getEnvironments() {
+            if (environments.remove("master")) {
+                environments.add(0, "master");
+            }
+            return environments;
+        }
+
+        public void setEnvironments(List<String> environments) {
+            this.environments = environments;
+        }
+
         public synchronized String assignServer(String targetServerType, Queue.Item item, String specificTarget) throws IOException, InterruptedException {
             String params = item.getParams().concat("\n");
             String shouldDeploy = "false";
+            String version = null;
+            String environ = null;
 
             if (items.contains(item.id)) {
                 items.remove(items.indexOf(item.id));
@@ -325,52 +346,10 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                 items.add(item.id);
                 return specificTarget;
             }
-
-            String freeServer;
-            if (specificTarget.equals("First Available Server")) {
-                freeServer = assignFirstAvailableServer(item, targetServerType, shouldDeploy);
-            } else {
-                freeServer = assignSpecificServer(item, specificTarget, shouldDeploy);
-            }
-            return freeServer;
-        }
-
-        public String assignSpecificServer(Queue.Item item, String specificTarget, String shouldDeploy) {
-            String freeServer = null;
-            for (ThrottleCategory category : categories) {
-                String serverType = category.getCategoryName();
-                List<TargetServer> servers = allFreeServers.get(serverType);
-                if (servers == null) {
-                    allFreeServers.put(serverType, allServersByType.get(serverType));
-                    servers = allFreeServers.get(serverType);
-                }
-                for (TargetServer targetServer : servers) {
-                    if (targetServer.getName().equals(specificTarget)) {
-                        freeServer = specificTarget;
-                        servers.remove(targetServer);
-                        assign(freeServer, item.task, shouldDeploy);
-                        items.add(item.id);
-                        break;
-                    }
-                }
-            }
-            return freeServer;
-        }
-
-        public String assignFirstAvailableServer(Queue.Item item, String targetServerType, String shouldDeploy) {
-            Task task = item.task;
-            String freeServer = null, environ = null, version = null;
-            String params = item.getParams().concat("\n");
-            List<TargetServer> servers = allFreeServers.get(targetServerType);
-            if (servers == null) {
-                allFreeServers.put(targetServerType, allServersByType.get(targetServerType));
-                servers = allFreeServers.get(targetServerType);
-            }
             if (params.contains("ENVIRONMENT=")) {
                 int indOfEnviron = params.indexOf("ENVIRONMENT=") + 12;
                 environ = params.substring(indOfEnviron, params.indexOf("\n", indOfEnviron));
             }
-
             if (params.contains("VERSION=")) {
                 int indOfVersion = params.indexOf("VERSION=") + 8;
                 version = params.substring(indOfVersion, params.indexOf("\n", indOfVersion));
@@ -379,18 +358,60 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                 }
 
             }
+            String freeServer;
+            if (specificTarget.equals("First Available Server")) {
+                freeServer = assignFirstAvailableServer(item, targetServerType, shouldDeploy, version, environ);
+            } else {
+                freeServer = assignSpecificServer(item, specificTarget, shouldDeploy, version, environ);
+            }
+            return freeServer;
+        }
+
+        public String assignSpecificServer(Queue.Item item, String specificTarget, String shouldDeploy, String version, String environ) {
+            String freeServer = null;
+            for (ThrottleCategory category : categories) {
+                String serverType = category.getCategoryName();
+                List<TargetServer> servers = allFreeServers.get(serverType);
+                if (servers == null) {
+                    allFreeServers.put(serverType, allServersByType.get(serverType));
+                    servers = allFreeServers.get(serverType);
+                }
+                serverType = "NoType";
+                List<TargetServer> noTypeServers = allFreeServers.get(serverType);
+                if (noTypeServers == null) {
+                    allFreeServers.put(serverType, allServersByType.get(serverType));
+                    noTypeServers = allFreeServers.get(serverType);
+                }
+                servers.addAll(noTypeServers);
+                for (TargetServer targetServer : servers) {
+                    if (targetServer.getName().equals(specificTarget)) {
+                        if (shouldDeploy.equals("false")) {
+                            shouldDeploy = shouldServerDeploy(targetServer, version, environ);
+                        }
+                        freeServer = specificTarget;
+                        servers.remove(targetServer);
+                        assign(freeServer, item.task, shouldDeploy);
+                        items.add(item.id);
+                        return freeServer;
+                    }
+                }
+            }
+            return freeServer;
+        }
+
+        public String assignFirstAvailableServer(Queue.Item item, String targetServerType, String shouldDeploy, String version, String environ) {
+            Task task = item.task;
+            String freeServer = null;
+            List<TargetServer> servers = allFreeServers.get(targetServerType);
+            if (servers == null) {
+                allFreeServers.put(targetServerType, allServersByType.get(targetServerType));
+                servers = allFreeServers.get(targetServerType);
+            }
             boolean foundServer = false;
             for (TargetServer targetServer : servers) {
-                boolean environGood = false;
-                boolean versionGood = false;
                 boolean in_use = targetServer.getInUse().equals("true");
-                if (environ != null) {
-                    environGood = targetServer.getBuild().equals(environ);
-                }
-                if (version != null) {
-                    versionGood = targetServer.getVersion().equals(version);
-                }
-                if (environGood && versionGood && !in_use) {
+                String needsToDeploy = shouldServerDeploy(targetServer, version, environ);
+                if (needsToDeploy.equals("false") && !in_use) {
                     foundServer = true;
                     freeServer = targetServer.getName();
                     servers.remove(targetServer);
@@ -428,6 +449,21 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             }
             taskAssignments.put(taskName, freeServer);
             getTargetServer(freeServer).setShouldDeploy(shouldDeploy);
+        }
+
+        private String shouldServerDeploy(TargetServer targetServer, String version, String environ) {
+            boolean environGood = false;
+            boolean versionGood = false;
+            if (environ != null) {
+                environGood = targetServer.getBuild().equals(environ);
+            }
+            if (version != null) {
+                versionGood = targetServer.getVersion().equals(version);
+            }
+            if (!(environGood && versionGood)) {
+                return "true";
+            }
+            return "false";
         }
 
         public void setServers(String targetServerType, List<TargetServer> servers) {
