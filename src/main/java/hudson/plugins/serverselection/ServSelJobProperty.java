@@ -234,7 +234,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         private List<ThrottleCategory> categories = new ArrayList<ThrottleCategory>();
         private List<String> allServersList = updateServerList();
         private List<Integer> items = new ArrayList<Integer>();
-        private List<String> environments = new ArrayList<String>();
+        private List<String> environments = Collections.synchronizedList(new ArrayList<String>());
         private boolean simple;
         private Map<String, String> latestByEnviron = new HashMap<String, String>();
         private Map<String, TargetServer> allTargetServers = new HashMap<String, TargetServer>();

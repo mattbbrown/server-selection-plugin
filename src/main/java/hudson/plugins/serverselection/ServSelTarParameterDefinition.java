@@ -22,7 +22,7 @@ import jenkins.model.Jenkins;
 /**
  * @author huybrechts
  */
-public class ServSelParameterDefinition extends SimpleParameterDefinition {
+public class ServSelTarParameterDefinition extends SimpleParameterDefinition {
 
     public static final String CHOICES_DELIMETER = "\\r?\\n";
 
@@ -35,14 +35,14 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     }
 
     @DataBoundConstructor
-    public ServSelParameterDefinition() {
+    public ServSelTarParameterDefinition() {
         super("TARGET", "Note: selecting a specific server will override the Target Server Type");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
         servers = descriptor.getAllServersList();
         defaultValue = null;
     }
 
-    private ServSelParameterDefinition(String name, List<String> servers, String defaultValue, String description) {
+    private ServSelTarParameterDefinition(String name, List<String> servers, String defaultValue, String description) {
         super(name, description);
         this.servers = servers;
         this.defaultValue = defaultValue;
@@ -52,7 +52,7 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
     public ParameterDefinition copyWithDefaultValue(ParameterValue defaultValue) {
         if (defaultValue instanceof StringParameterValue) {
             StringParameterValue value = (StringParameterValue) defaultValue;
-            return new ServSelParameterDefinition(getName(), servers, value.value, getDescription());
+            return new ServSelTarParameterDefinition(getName(), servers, value.value, getDescription());
         } else {
             return this;
         }
@@ -97,7 +97,7 @@ public class ServSelParameterDefinition extends SimpleParameterDefinition {
 
         @Override
         public String getDisplayName() {
-            return "Server Selection Parameter";
+            return "Server Target Parameter";
         }
 
         @Override

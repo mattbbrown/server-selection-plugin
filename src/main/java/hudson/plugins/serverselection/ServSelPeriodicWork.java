@@ -69,7 +69,6 @@ public class ServSelPeriodicWork extends PeriodicWork {
                             newServersAdded = true;
                             newServers.add(server);
                             targetServer = new TargetServer(server, targetServerType);
-
                         }
                         targetServer.setBuild(build);
                         targetServer.setVersion(version);
@@ -100,14 +99,14 @@ public class ServSelPeriodicWork extends PeriodicWork {
                 noTypeServers.add(targetServer);
             }
         }
-        descriptor.setServers("NoType", noTypeServers);
         if (newServersAdded) {
-            LOGGER.log(Level.INFO, "[Server Selection] New Servers Added: {1}", newServers);
+            LOGGER.log(Level.INFO, "[Server Selection] New Servers Added: {0}", newServers.toArray());
         }
+        descriptor.setServers("NoType", noTypeServers);
     }
 
     private void updateEnvironmentList(ServSelJobProperty.DescriptorImpl descriptor) throws IOException {
-        String command = "environments.all {|e| puts e.name}";
+        String command = "environments.all{|e|puts(e.name)}";
         BufferedReader reader = createAndExecuteTempFile("getEnvironments.rb", command);
         String line;
         List<String> environments = new ArrayList<String>();
@@ -139,7 +138,9 @@ public class ServSelPeriodicWork extends PeriodicWork {
                 });
                 List<String> dirs = Arrays.asList(directories);
                 String latestBuild = dirs.get(dirs.size() - 1);
-                LOGGER.log(Level.SEVERE, "Setting {0} latest as {1}", new Object[]{environ, latestBuild});
+                if (!descriptor.getLatest(environ).equals(latestBuild)) {
+                    LOGGER.log(Level.SEVERE, "Updating {0} latest to {1}", new Object[]{environ, latestBuild});
+                }
                 descriptor.setLatest(environ, latestBuild);
             }
         }

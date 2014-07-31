@@ -36,14 +36,14 @@ public class ServSelEnvParameterDefinition extends SimpleParameterDefinition {
 
     @DataBoundConstructor
     public ServSelEnvParameterDefinition() {
-        super("ENVIRONMENT");
+        super("ENVIRONMENT", "");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
         environments = descriptor.getEnvironments();
         defaultValue = null;
     }
 
     private ServSelEnvParameterDefinition(String name, List<String> environments, String defaultValue, String description) {
-        super(name, description);
+        super("ENVIRONMENT", "");
         this.environments = environments;
         this.defaultValue = defaultValue;
     }
@@ -52,7 +52,7 @@ public class ServSelEnvParameterDefinition extends SimpleParameterDefinition {
     public ParameterDefinition copyWithDefaultValue(ParameterValue defaultValue) {
         if (defaultValue instanceof StringParameterValue) {
             StringParameterValue value = (StringParameterValue) defaultValue;
-            return new ServSelEnvParameterDefinition(getName(), environments, value.value, getDescription());
+            return new ServSelEnvParameterDefinition(getName(), environments, value.value, "");
         } else {
             return this;
         }
@@ -96,7 +96,7 @@ public class ServSelEnvParameterDefinition extends SimpleParameterDefinition {
 
         @Override
         public String getDisplayName() {
-            return "Server Selection Parameter";
+            return "Server Environment Parameter";
         }
 
         @Override

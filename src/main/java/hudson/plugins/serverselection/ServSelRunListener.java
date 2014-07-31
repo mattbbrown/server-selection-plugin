@@ -133,10 +133,12 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
     private String getYmlTarget(ServSelJobProperty tjp, String target) {
         String serverType = tjp.getCategories().get(0);
         String shortTargetName = target.substring(0, target.indexOf('.'));
+        String firstChar = "" + shortTargetName.charAt(0);
+        String nameWithCorrectCase = firstChar.toUpperCase() + shortTargetName.toLowerCase().substring(1);
         if (serverType.charAt(0) == 'H') {
-            return shortTargetName.concat("_cluster");
+            return nameWithCorrectCase.concat("_cluster");
         } else {
-            return shortTargetName;
+            return nameWithCorrectCase;
         }
     }
 
