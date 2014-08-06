@@ -12,9 +12,9 @@ and open the template in the editor.
     <f:entry title="${it.name}" description="${it.formattedDescription}">
         <div name="parameter">
             <input type="hidden" name="name" value="${it.name}" />
-            <select name="environment">
-                <j:forEach var="environment" items="${it.environments}">
-                    <f:option selected="${it.environment==environment}">${environment}</f:option>
+            <select name="value">
+                <j:forEach var="value" items="${it.environments}">
+                    <f:option selected="${it.value==value}">${value}</f:option>
                 </j:forEach>
             </select>
         </div>

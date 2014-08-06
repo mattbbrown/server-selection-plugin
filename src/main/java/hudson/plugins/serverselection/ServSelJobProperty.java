@@ -19,11 +19,11 @@ import hudson.model.Queue;
 import hudson.model.Queue.Task;
 import java.io.IOException;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -44,15 +44,11 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
     @Deprecated
     transient String category;
 
-    private Integer maxConcurrentPerNode;
-    private Integer maxConcurrentTotal;
     private List<String> categories;
-    private boolean throttleEnabled;
-    private String throttleOption;
+    private boolean servSelEnabled;
     private transient boolean throttleConfiguration;
     private @CheckForNull
     ServSelMatrixProjectOptions matrixOptions;
-    private String target;
 
     /**
      * Store a config version so we're able to migrate config on various
@@ -61,21 +57,13 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
     private Long configVersion;
 
     @DataBoundConstructor
-    public ServSelJobProperty(Integer maxConcurrentPerNode,
-            Integer maxConcurrentTotal,
-            List<String> categories,
-            boolean throttleEnabled,
-            String throttleOption,
-            String target,
+    public ServSelJobProperty(List<String> categories,
+            boolean servSelEnabled,
             @CheckForNull ServSelMatrixProjectOptions matrixOptions
     ) {
-        this.maxConcurrentPerNode = maxConcurrentPerNode == null || maxConcurrentPerNode == 0 ? 1 : maxConcurrentPerNode;
-        this.maxConcurrentTotal = maxConcurrentTotal == null || maxConcurrentTotal == 0 ? 1 : maxConcurrentTotal;
         this.categories = categories == null ? new ArrayList<String>() : categories;
-        this.throttleEnabled = throttleEnabled;
-        this.throttleOption = throttleOption == null ? "category" : throttleOption;
+        this.servSelEnabled = servSelEnabled;
         this.matrixOptions = matrixOptions;
-        this.target = target == null ? "First Available Server" : target;
     }
 
     /**
@@ -92,16 +80,6 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             categories.add(category);
             category = null;
         }
-
-        if (configVersion < 1 && throttleOption == null) {
-            if (categories.isEmpty()) {
-                throttleOption = "project";
-            } else {
-                throttleOption = "category";
-                maxConcurrentPerNode = 0;
-                maxConcurrentTotal = 0;
-            }
-        }
         configVersion = 1L;
 
         // Handle the throttleConfiguration in custom builds (not released)
@@ -115,7 +93,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
     @Override
     protected void setOwner(AbstractProject<?, ?> owner) {
         super.setOwner(owner);
-        if (throttleEnabled && categories != null) {
+        if (servSelEnabled && categories != null) {
             DescriptorImpl descriptor = (DescriptorImpl) getDescriptor();
             synchronized (descriptor.propertiesByCategoryLock) {
                 for (String c : categories) {
@@ -130,43 +108,12 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         }
     }
 
-    public String getTarget() {
-        if (target == null) {
-            target = "First Available Server";
-        }
-        return target;
-    }
-
-    public void setTarget(String target) {
-        this.target = target;
-    }
-
     public boolean getThrottleEnabled() {
-        return throttleEnabled;
-    }
-
-    public String getThrottleOption() {
-        return throttleOption;
+        return servSelEnabled;
     }
 
     public List<String> getCategories() {
         return categories;
-    }
-
-    public Integer getMaxConcurrentPerNode() {
-        if (maxConcurrentPerNode == null) {
-            maxConcurrentPerNode = 0;
-        }
-
-        return maxConcurrentPerNode;
-    }
-
-    public Integer getMaxConcurrentTotal() {
-        if (maxConcurrentTotal == null) {
-            maxConcurrentTotal = 0;
-        }
-
-        return maxConcurrentTotal;
     }
 
     @CheckForNull
@@ -232,14 +179,11 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public static final String DELIMETER = "\\r?\\n";
         private List<ThrottleCategory> categories = new ArrayList<ThrottleCategory>();
+        private List<TargetServer> servers = Collections.synchronizedList(new ArrayList<TargetServer>());
         private List<String> allServersList = updateServerList();
         private List<Integer> items = new ArrayList<Integer>();
         private List<String> environments = Collections.synchronizedList(new ArrayList<String>());
-        private boolean simple;
         private Map<String, String> latestByEnviron = new HashMap<String, String>();
-        private Map<String, TargetServer> allTargetServers = new HashMap<String, TargetServer>();
-        private Map<String, List<TargetServer>> allServersByType = new HashMap<String, List<TargetServer>>();
-        private Map<String, List<TargetServer>> allFreeServers = new HashMap<String, List<TargetServer>>();
         private Map<String, String> taskAssignments = new HashMap<String, String>();
         private Map<String, TargetServer> fullNameAssigns = new HashMap<String, TargetServer>();
         /**
@@ -269,21 +213,11 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public List<String> updateServerList() {
             List<String> newAllServersList = new ArrayList<String>();
-            newAllServersList.add("First Available Server");
-            for (ThrottleCategory category : categories) {
-                String serverType = category.getCategoryName();
-                List<TargetServer> serverOfType = allServersByType.get(serverType);
-                for (TargetServer servers : serverOfType) {
-                    newAllServersList.add(servers.getName());
-                }
+            for (TargetServer ts : servers) {
+                newAllServersList.add(ts.getName());
             }
-            String serverType = "NoType";
-            if (allServersByType != null && allServersByType.get(serverType) != null) {
-                List<TargetServer> serverOfType = allServersByType.get(serverType);
-                for (TargetServer servers : serverOfType) {
-                    newAllServersList.add(servers.getName());
-                }
-            }
+            Collections.sort(newAllServersList);
+            newAllServersList.add(0, "First Available Server");
             return newAllServersList;
         }
 
@@ -292,13 +226,17 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             return allServersList;
         }
 
+        public void addToServers(TargetServer targetServer) {
+            servers.remove(targetServer);
+            servers.add(targetServer);
+        }
+
         public Map<String, TargetServer> getFullAssigns() {
             return fullNameAssigns;
         }
 
         public void putFullAssignments(String fullName, String server) {
             fullNameAssigns.put(fullName, getTargetServer(server));
-
         }
 
         public void removeFullAssignments(String fullName) {
@@ -332,101 +270,80 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             String params = item.getParams().concat("\n");
             String shouldDeploy = "false";
             String version = null;
-            String environ = null;
+            String environment = null;
 
             if (items.contains(item.id)) {
                 items.remove(items.indexOf(item.id));
                 return "Server Already Selected";
             }
+
             if (params.toLowerCase().contains("should_deploy=true")) {
                 shouldDeploy = "true";
             }
+
             if (params.toLowerCase().contains("get_lock=false")) {
-                assign(specificTarget, item.task, shouldDeploy);
+                assign(getTargetServer(specificTarget), item.task, shouldDeploy);
                 items.add(item.id);
                 return specificTarget;
             }
             if (params.contains("ENVIRONMENT=")) {
                 int indOfEnviron = params.indexOf("ENVIRONMENT=") + 12;
-                environ = params.substring(indOfEnviron, params.indexOf("\n", indOfEnviron));
+                environment = params.substring(indOfEnviron, params.indexOf("\n", indOfEnviron));
             }
             if (params.contains("VERSION=")) {
                 int indOfVersion = params.indexOf("VERSION=") + 8;
                 version = params.substring(indOfVersion, params.indexOf("\n", indOfVersion));
-                if (version.equals("latest") && environ != null) {
-                    version = getLatest(environ);
+                if (version.equals("latest") && environment != null) {
+                    version = getLatest(environment);
                 }
 
             }
             String freeServer;
             if (specificTarget.equals("First Available Server")) {
-                freeServer = assignFirstAvailableServer(item, targetServerType, shouldDeploy, version, environ);
+                freeServer = assignFirstAvailableServer(item, targetServerType, shouldDeploy, version, environment);
             } else {
-                freeServer = assignSpecificServer(item, specificTarget, shouldDeploy, version, environ);
+                freeServer = assignSpecificServer(item, specificTarget, shouldDeploy, version, environment);
             }
             return freeServer;
         }
 
-        public String assignSpecificServer(Queue.Item item, String specificTarget, String shouldDeploy, String version, String environ) {
+        public String assignSpecificServer(Queue.Item item, String specificTarget, String shouldDeploy, String version, String environment) {
             String freeServer = null;
-            for (ThrottleCategory category : categories) {
-                String serverType = category.getCategoryName();
-                List<TargetServer> servers = allFreeServers.get(serverType);
-                if (servers == null) {
-                    allFreeServers.put(serverType, allServersByType.get(serverType));
-                    servers = allFreeServers.get(serverType);
-                }
-                serverType = "NoType";
-                List<TargetServer> noTypeServers = allFreeServers.get(serverType);
-                if (noTypeServers == null) {
-                    allFreeServers.put(serverType, allServersByType.get(serverType));
-                    noTypeServers = allFreeServers.get(serverType);
-                }
-                servers.addAll(noTypeServers);
-                for (TargetServer targetServer : servers) {
-                    if (targetServer.getName().equals(specificTarget)) {
-                        if (shouldDeploy.equals("false")) {
-                            shouldDeploy = shouldServerDeploy(targetServer, version, environ);
-                        }
-                        freeServer = specificTarget;
-                        servers.remove(targetServer);
-                        assign(freeServer, item.task, shouldDeploy);
-                        items.add(item.id);
-                        return freeServer;
+            for (TargetServer targetServer : servers) {
+                if (targetServer.getName().equals(specificTarget) && !targetServer.isBusy()) {
+                    if (shouldDeploy.equals("false")) {
+                        shouldDeploy = shouldServerDeploy(targetServer, version, environment);
                     }
+                    freeServer = specificTarget;
+                    assign(targetServer, item.task, shouldDeploy);
+                    items.add(item.id);
+                    return freeServer;
                 }
             }
             return freeServer;
         }
 
-        public String assignFirstAvailableServer(Queue.Item item, String targetServerType, String shouldDeploy, String version, String environ) {
+        public String assignFirstAvailableServer(Queue.Item item, String targetServerType, String shouldDeploy, String version, String environment) {
             Task task = item.task;
             String freeServer = null;
-            List<TargetServer> servers = allFreeServers.get(targetServerType);
-            if (servers == null) {
-                allFreeServers.put(targetServerType, allServersByType.get(targetServerType));
-                servers = allFreeServers.get(targetServerType);
-            }
             boolean foundServer = false;
             for (TargetServer targetServer : servers) {
-                boolean in_use = targetServer.getInUse().equals("true");
-                String needsToDeploy = shouldServerDeploy(targetServer, version, environ);
-                if (needsToDeploy.equals("false") && !in_use) {
-                    foundServer = true;
-                    freeServer = targetServer.getName();
-                    servers.remove(targetServer);
-                    assign(freeServer, task, shouldDeploy);
-                    items.add(item.id);
-                    break;
+                if (targetServer.getServerType().equals(targetServerType) && !targetServer.isBusy() && !targetServer.getInUse()) {
+                    String needsToDeploy = shouldServerDeploy(targetServer, version, environment);
+                    if (needsToDeploy.equals("false")) {
+                        foundServer = true;
+                        freeServer = targetServer.getName();
+                        assign(targetServer, task, shouldDeploy);
+                        items.add(item.id);
+                        break;
+                    }
                 }
             }
             if (!foundServer) {
                 for (TargetServer targetServer : servers) {
-                    boolean in_use = targetServer.getInUse().equals("true");
-                    if (!in_use) {
+                    if (targetServer.getServerType().equals(targetServerType) && !targetServer.isBusy() && !targetServer.getInUse()) {
                         freeServer = targetServer.getName();
-                        servers.remove(targetServer);
-                        assign(freeServer, task, "true");
+                        assign(targetServer, task, "true");
                         items.add(item.id);
                         break;
                     }
@@ -435,7 +352,10 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             return freeServer;
         }
 
-        public void assign(String freeServer, Task task, String shouldDeploy) {
+        public void assign(TargetServer targetServer, Task task, String shouldDeploy) {
+            targetServer.setBusy(true);
+            targetServer.setShouldDeploy(shouldDeploy);
+            String serverName = targetServer.getName();
             int num = 1;
             boolean foundTask = false;
             String taskName = null;
@@ -447,34 +367,30 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                     num++;
                 }
             }
-            taskAssignments.put(taskName, freeServer);
-            getTargetServer(freeServer).setShouldDeploy(shouldDeploy);
+            LOGGER.log(Level.SEVERE, "assigned server {0} to task {1}", new Object[]{serverName, taskName});
+            taskAssignments.put(taskName, serverName);
         }
 
-        private String shouldServerDeploy(TargetServer targetServer, String version, String environ) {
+        private String shouldServerDeploy(TargetServer targetServer, String version, String environment) {
             boolean environGood = false;
             boolean versionGood = false;
-            if (environ != null) {
-                environGood = targetServer.getBuild().equals(environ);
+            if (environment != null) {
+                environGood = targetServer.getEnvironment().equals(environment);
             }
             if (version != null) {
                 versionGood = targetServer.getVersion().equals(version);
             }
-            if (!(environGood && versionGood)) {
+            if (!(environGood && versionGood && targetServer.getLastDeployPassed())) {
                 return "true";
             }
             return "false";
-        }
-
-        public void setServers(String targetServerType, List<TargetServer> servers) {
-            allServersByType.put(targetServerType, servers);
         }
 
         public String UsingServer(String displayName) {
             int num = 1;
             boolean foundServer = false;
             String taskName = null;
-            while (num < 10) {
+            while (num < 100) {
                 taskName = displayName.replace(" ", "_") + "_num_" + num;
                 if (taskAssignments.get(taskName) != null) {
                     foundServer = true;
@@ -494,19 +410,27 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             return getTargetServer(server).getTask();
         }
 
-        public void releaseServer(String server) {
-            TargetServer targetServer = getTargetServer(server);
-            targetServer.setTask(null);
-            List<TargetServer> servers = allFreeServers.get(targetServer.getServerType());
+        public void addServer(TargetServer targetServer) {
             servers.add(targetServer);
         }
 
-        public TargetServer getTargetServer(String server) {
-            return allTargetServers.get(server);
+        public void releaseServer(String server) {
+            TargetServer targetServer = getTargetServer(server);
+            targetServer.setTask(null);
+            targetServer.setBusy(false);
         }
 
-        public void setTargetServer(TargetServer targetServer) {
-            allTargetServers.put(targetServer.getName(), targetServer);
+        public List<TargetServer> getServers() {
+            return servers;
+        }
+
+        public TargetServer getTargetServer(String server) {
+            for (TargetServer ts : servers) {
+                if (ts.getName().equals(server)) {
+                    return ts;
+                }
+            }
+            return null;
         }
 
         @Override
@@ -594,14 +518,6 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             return categories;
         }
 
-        public void setSimple(boolean simple) {
-            this.simple = simple;
-        }
-
-        public boolean getSimple() {
-            return simple;
-        }
-
         public ListBoxModel doFillCategoryItems() {
             ListBoxModel m = new ListBoxModel();
 
@@ -618,49 +534,15 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
     public static final class ThrottleCategory extends AbstractDescribableImpl<ThrottleCategory> {
 
-        private Integer maxConcurrentPerNode;
-        private Integer maxConcurrentTotal;
         private String categoryName;
-        private List<NodeLabeledPair> nodeLabeledPairs;
 
         @DataBoundConstructor
-        public ThrottleCategory(String categoryName,
-                Integer maxConcurrentPerNode,
-                Integer maxConcurrentTotal,
-                List<NodeLabeledPair> nodeLabeledPairs) {
-            this.maxConcurrentPerNode = maxConcurrentPerNode == null || maxConcurrentPerNode == 0 ? 1 : maxConcurrentPerNode;
-            this.maxConcurrentTotal = maxConcurrentTotal == null || maxConcurrentTotal == 0 ? 1 : maxConcurrentTotal;
+        public ThrottleCategory(String categoryName) {
             this.categoryName = categoryName;
-            this.nodeLabeledPairs
-                    = nodeLabeledPairs == null ? new ArrayList<NodeLabeledPair>() : nodeLabeledPairs;
-        }
-
-        public Integer getMaxConcurrentPerNode() {
-            if (maxConcurrentPerNode == null || maxConcurrentPerNode == 0) {
-                maxConcurrentPerNode = 1;
-            }
-
-            return maxConcurrentPerNode;
-        }
-
-        public Integer getMaxConcurrentTotal() {
-            if (maxConcurrentTotal == null || maxConcurrentTotal == 0) {
-                maxConcurrentTotal = 1;
-            }
-
-            return maxConcurrentTotal;
         }
 
         public String getCategoryName() {
             return categoryName;
-        }
-
-        public List<NodeLabeledPair> getNodeLabeledPairs() {
-            if (nodeLabeledPairs == null) {
-                nodeLabeledPairs = new ArrayList<NodeLabeledPair>();
-            }
-
-            return nodeLabeledPairs;
         }
 
         @Extension
@@ -673,46 +555,5 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         }
     }
 
-    /**
-     * @author marco.miller@ericsson.com
-     */
-    public static final class NodeLabeledPair extends AbstractDescribableImpl<NodeLabeledPair> {
-
-        private String throttledNodeLabel;
-        private Integer maxConcurrentPerNodeLabeled;
-
-        @DataBoundConstructor
-        public NodeLabeledPair(String throttledNodeLabel,
-                Integer maxConcurrentPerNodeLabeled) {
-            this.throttledNodeLabel = throttledNodeLabel == null ? new String() : throttledNodeLabel;
-            this.maxConcurrentPerNodeLabeled
-                    = maxConcurrentPerNodeLabeled == null || maxConcurrentPerNodeLabeled == 0 ? new Integer(1) : maxConcurrentPerNodeLabeled;
-        }
-
-        public String getThrottledNodeLabel() {
-            if (throttledNodeLabel == null) {
-                throttledNodeLabel = new String();
-            }
-            return throttledNodeLabel;
-        }
-
-        public Integer getMaxConcurrentPerNodeLabeled() {
-            if (maxConcurrentPerNodeLabeled == null || maxConcurrentPerNodeLabeled == 0) {
-                maxConcurrentPerNodeLabeled = new Integer(1);
-            }
-            return maxConcurrentPerNodeLabeled;
-        }
-
-        @Extension
-        public static class DescriptorImpl extends Descriptor<NodeLabeledPair> {
-
-            @Override
-            public String getDisplayName() {
-                return "";
-            }
-        }
-    }
-
-    private static final Logger LOGGER = Logger.getLogger(ServSelQueueTaskDispatcher.class
-            .getName());
+    private static final Logger LOGGER = Logger.getLogger(ServSelQueueTaskDispatcher.class.getName());
 }

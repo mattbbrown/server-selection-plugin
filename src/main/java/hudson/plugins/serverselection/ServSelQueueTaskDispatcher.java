@@ -22,12 +22,12 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
     public CauseOfBlockage canRun(Queue.Item item) {
         try {
             Task task = item.task;
-            ServSelJobProperty tjp = getThrottleJobProperty(task);
-            if (!shouldBeThrottled(item, tjp)) {
+            ServSelJobProperty ssjp = getServSelJobProperty(task);
+            if (!shouldAssignServer(item, ssjp)) {
                 return null;
             }
-
-            String targetServerType = tjp.getCategories().get(0);
+            
+            String targetServerType = ssjp.getCategories().get(0);
             String serverTaken;
             String params = item.getParams().concat("\n");
             String specificServer = "First Available Server";
@@ -36,7 +36,7 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
                 specificServer = params.substring(indOfTarget, params.indexOf("\n", indOfTarget));
             }
 
-            ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) tjp.getDescriptor();
+            ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) ssjp.getDescriptor();
             serverTaken = descriptor.assignServer(targetServerType, item, specificServer);
             if (serverTaken == null && !specificServer.equals("First Available Server")) {
                 String taskUsingServer = descriptor.getServerAssignment(specificServer);
@@ -54,12 +54,12 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
         return null;
     }
 
-    private boolean shouldBeThrottled(@Nonnull Queue.Item item, @CheckForNull ServSelJobProperty tjp) throws IOException, InterruptedException {
+    private boolean shouldAssignServer(@Nonnull Queue.Item item, @CheckForNull ServSelJobProperty ssjp) throws IOException, InterruptedException {
         Task task = item.task;
-        if (tjp == null) {
+        if (ssjp == null) {
             return false;
         }
-        if (!tjp.getThrottleEnabled()) {
+        if (!ssjp.getThrottleEnabled()) {
             return false;
         }
 
@@ -71,14 +71,14 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
     }
 
     @CheckForNull
-    private ServSelJobProperty getThrottleJobProperty(Task task) {
+    private ServSelJobProperty getServSelJobProperty(Task task) {
         if (task instanceof AbstractProject) {
             AbstractProject<?, ?> p = (AbstractProject<?, ?>) task;
             if (task instanceof MatrixConfiguration) {
                 p = (AbstractProject<?, ?>) ((MatrixConfiguration) task).getParent();
             }
-            ServSelJobProperty tjp = p.getProperty(ServSelJobProperty.class);
-            return tjp;
+            ServSelJobProperty ssjp = p.getProperty(ServSelJobProperty.class);
+            return ssjp;
         }
         return null;
     }

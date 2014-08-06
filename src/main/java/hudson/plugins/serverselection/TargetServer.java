@@ -9,28 +9,57 @@ package hudson.plugins.serverselection;
  *
  * @author mbrown
  */
-public class TargetServer {
+public class TargetServer implements Comparable<TargetServer> {
 
     private final String name;
     private String serverType;
     private String task;
-    private String build;
+    private String environment;
     private String version;
     private String shouldDeploy;
-    private String inUse;
+    private boolean inUse;
+    private boolean busy;
+    private boolean stillHere;
     private boolean lastDeployPassed;
 
-    public TargetServer(String name, String serverType) {
+    public TargetServer(String name) {
         this.name = name;
-        this.serverType = serverType;
+        busy = false;
+        lastDeployPassed = true;
     }
 
-    public void setInUse(String inUse) {
+    public TargetServer(String name, String serverType, String environment, String version, boolean inUse) {
+        this.name = name;
+        this.serverType = serverType;
+        this.environment = environment;
+        this.version = version;
+        this.inUse = inUse;
+        busy = false;
+        lastDeployPassed = true;
+    }
+
+    public void setInUse(boolean inUse) {
         this.inUse = inUse;
     }
 
-    public String getInUse() {
+    public boolean getInUse() {
         return inUse;
+    }
+
+    public boolean isStillHere() {
+        return stillHere;
+    }
+
+    public void setStillHere(boolean stillHere) {
+        this.stillHere = stillHere;
+    }
+
+    public boolean isBusy() {
+        return busy;
+    }
+
+    public void setBusy(boolean busy) {
+        this.busy = busy;
     }
 
     public boolean getLastDeployPassed() {
@@ -61,8 +90,8 @@ public class TargetServer {
         return task;
     }
 
-    public String getBuild() {
-        return build;
+    public String getEnvironment() {
+        return environment;
     }
 
     public String getVersion() {
@@ -77,15 +106,40 @@ public class TargetServer {
         this.task = task;
     }
 
-    public void setBuild(String build) {
-        this.build = build;
+    public void setEnvironment(String environment) {
+        this.environment = environment;
     }
 
     public void setVersion(String version) {
         this.version = version;
     }
 
+    @Override
     public String toString() {
-        return name;
+        return name + "\n";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        boolean result = false;
+        if (o != null && o instanceof TargetServer) {
+            TargetServer ts = (TargetServer) o;
+            if (name != null && ts != null) {
+                result = name.equals(ts.getName());
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 17 * hash + (this.name != null ? this.name.hashCode() : 0);
+        return hash;
+    }
+
+    @Override
+    public int compareTo(TargetServer ts) {
+        return name.compareTo(ts.getName());
     }
 }

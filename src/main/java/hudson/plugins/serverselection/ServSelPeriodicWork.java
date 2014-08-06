@@ -52,57 +52,53 @@ public class ServSelPeriodicWork extends PeriodicWork {
 
     private void updateServerList(ServSelJobProperty.DescriptorImpl descriptor) throws IOException {
         List<String> serverTypes = descriptor.getCategoryNames();
-        boolean newServersAdded = false;
-        List<String> newServers = new ArrayList<String>();
-        if (serverTypes != null && !serverTypes.isEmpty()) {
-            for (String targetServerType : serverTypes) {
-                List<TargetServer> serverList = new ArrayList<TargetServer>();
-                try {
-                    String command = "nodes.find(:tags =>'" + targetServerType + "'){|n|puts(n.name+','+n.environment+','+n['vht']['installed_version']+','+n.tags.include?('in_use').to_s)}";
-                    BufferedReader reader = createAndExecuteTempFile("jenkinsChefCall.rb", command);
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        String[] info = line.split(",");
-                        String server = info[0], build = info[1], version = info[2], inUse = info[3];
-                        TargetServer targetServer = descriptor.getTargetServer(server);
-                        if (targetServer == null) {
-                            newServersAdded = true;
-                            newServers.add(server);
-                            targetServer = new TargetServer(server, targetServerType);
-                        }
-                        targetServer.setBuild(build);
-                        targetServer.setVersion(version);
-                        targetServer.setInUse(inUse);
-                        descriptor.setTargetServer(targetServer);
-                        serverList.add(targetServer);
-                    }
-
-                    descriptor.setServers(targetServerType, serverList);
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "[Server Selection] Chef call exception raised: ", e);
+        String command = "nodes.all{ |n| print n.name + ',' + n.environment + ',';print n['vht']['installed_version'].to_s unless n['vht'] == nil; n.tags.each{|tag| print ',' + tag}; puts ''}";
+        BufferedReader reader = createAndExecuteTempFile("jenkinsChefCall.rb", command);
+        String line;
+        while ((line = reader.readLine()) != null) {
+            String[] info = line.split(",");
+            String server = info[0], environment = info[1], version = "";
+            if (info.length > 2) {
+                version = info[2];
+            }
+            List<String> tags = new ArrayList<String>();
+            for (int i = 3; i < info.length; i++) {
+                tags.add(info[i]);
+            }
+            String targetServerType = "NoType";
+            for (String serverType : serverTypes) {
+                if (tags.contains(serverType)) {
+                    targetServerType = serverType;
+                    break;
                 }
             }
-        }
-        String command = "nodes.all{|n|puts(n.name)}";
-        BufferedReader reader = createAndExecuteTempFile("jenkinsAllNodes.rb", command);
-        List<TargetServer> noTypeServers = new ArrayList<TargetServer>();
-        String server;
-        while ((server = reader.readLine()) != null) {
+            boolean inUse = tags.contains("in_use");
             TargetServer targetServer = descriptor.getTargetServer(server);
             if (targetServer == null) {
-                newServersAdded = true;
-                newServers.add(server);
-                targetServer = new TargetServer(server, "NoType");
+                targetServer = new TargetServer(server, targetServerType, environment, version, inUse);
+                LOGGER.log(Level.INFO, "Added Server {0}", server);
+                descriptor.addServer(targetServer);
+            } else {
+                targetServer.setServerType(targetServerType);
+                targetServer.setEnvironment(environment);
+                targetServer.setVersion(version);
+                targetServer.setInUse(inUse);
             }
-            if (targetServer.getServerType().equals("NoType")) {
-                descriptor.setTargetServer(targetServer);
-                noTypeServers.add(targetServer);
+            targetServer.setStillHere(true);
+        }
+        removeServersNoLongerInChef(descriptor);
+    }
+
+    private void removeServersNoLongerInChef(ServSelJobProperty.DescriptorImpl descriptor) {
+        List<TargetServer> servers = descriptor.getServers();
+        for (int i = 0; i < servers.size(); i++) {
+            if (servers.get(i).isStillHere()) {
+                servers.get(i).setStillHere(false);
+            } else {
+                servers.remove(i);
+                i--;
             }
         }
-        if (newServersAdded) {
-            LOGGER.log(Level.INFO, "[Server Selection] New Servers Added: {0}", newServers.toArray());
-        }
-        descriptor.setServers("NoType", noTypeServers);
     }
 
     private void updateEnvironmentList(ServSelJobProperty.DescriptorImpl descriptor) throws IOException {
@@ -133,7 +129,13 @@ public class ServSelPeriodicWork extends PeriodicWork {
                 String[] directories = file.list(new FilenameFilter() {
                     @Override
                     public boolean accept(File current, String name) {
-                        return (new File(current, name).isDirectory()) && name.matches(regex);
+                        String[] fileNames = new File(current, name).list();
+                        for (String subFileName : fileNames) {
+                            if (subFileName.contains(name)) {
+                                return (new File(current, name).isDirectory()) && name.matches(regex);
+                            }
+                        }
+                        return false;
                     }
                 });
                 List<String> dirs = Arrays.asList(directories);

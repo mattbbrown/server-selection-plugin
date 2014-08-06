@@ -23,17 +23,9 @@
  */
 package hudson.plugins.serverselection;
 
-import hudson.EnvVars;
-import hudson.model.AbstractBuild;
 import hudson.model.ParameterValue;
-import hudson.model.Run;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.export.Exported;
-
-import java.util.Locale;
-
-import hudson.util.VariableResolver;
-import java.util.Map;
 
 /**
  * {@link ParameterValue} created from {@link StringParameterDefinition}.

@@ -1,22 +1,17 @@
 package hudson.plugins.serverselection;
 
-import hudson.util.FormValidation;
-import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.export.Exported;
 import org.apache.commons.lang.StringUtils;
 import net.sf.json.JSONObject;
 import hudson.Extension;
-import hudson.model.AbstractProject;
 import hudson.model.ParameterDefinition;
 import hudson.model.ParameterValue;
 import hudson.model.SimpleParameterDefinition;
 import hudson.model.StringParameterValue;
-
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Arrays;
+
 import jenkins.model.Jenkins;
 
 /**
@@ -39,13 +34,13 @@ public class ServSelTarParameterDefinition extends SimpleParameterDefinition {
         super("TARGET", "Note: selecting a specific server will override the Target Server Type");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
         servers = descriptor.getAllServersList();
-        defaultValue = null;
+        defaultValue = "First Available Server";
     }
 
     private ServSelTarParameterDefinition(String name, List<String> servers, String defaultValue, String description) {
         super(name, description);
         this.servers = servers;
-        this.defaultValue = defaultValue;
+        this.defaultValue = "First Available Server";
     }
 
     @Override
@@ -69,7 +64,7 @@ public class ServSelTarParameterDefinition extends SimpleParameterDefinition {
 
     @Override
     public StringParameterValue getDefaultParameterValue() {
-        return new StringParameterValue(getName(), defaultValue == null ? servers.get(0) : defaultValue, getDescription());
+        return new StringParameterValue(getName(), (String) (defaultValue == null ? "First Available Server" : defaultValue), getDescription());
     }
 
     private ServSelParameterValue checkValue(ServSelParameterValue value) {

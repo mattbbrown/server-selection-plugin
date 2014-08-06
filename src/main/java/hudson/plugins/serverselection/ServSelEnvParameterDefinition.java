@@ -87,8 +87,8 @@ public class ServSelEnvParameterDefinition extends SimpleParameterDefinition {
     }
 
     @Override
-    public StringParameterValue createValue(String server) {
-        return checkValue(new StringParameterValue(getName(), server, getDescription()));
+    public StringParameterValue createValue(String environment) {
+        return checkValue(new StringParameterValue(getName(), environment, getDescription()));
     }
 
     @Extension

@@ -37,24 +37,31 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
             @Override
             public void buildEnvVars(Map<String, String> env) {
                 AbstractProject project = build.getProject();
-                ServSelJobProperty tjp;
+                Map<String, String> envVars = build.getBuildVariables();
+                ServSelJobProperty ssjp;
                 if (project instanceof MatrixConfiguration) {
-                    tjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
+                    ssjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
                 } else {
-                    tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
+                    ssjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
                 }
-                if (tjp != null && tjp.getThrottleEnabled()) {
+                if (ssjp != null && ssjp.getThrottleEnabled()) {
                     TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
                     String targetName = targetServer != null ? targetServer.getName() : null;
+                    String environ = envVars.get("ENVIRONMENT");
                     String shouldDeploy = targetServer != null ? targetServer.getShouldDeploy() : null;
                     if (targetName != null) {
                         env.put("TARGET", targetName);
-                        env.put("YAML_TARGET", getYmlTarget(tjp, targetName));
+                        env.put("YAML_TARGET", getYmlTarget(ssjp, targetName));
                     }
                     if (shouldDeploy != null) {
                         env.put("DEPLOY", shouldDeploy);
                     }
-
+                    //This is currently hardcoded until a suitable UI is built under the global configuration page
+                    if (environ != null && environ.equals("build80")) {
+                        env.put("BRANCH_FOR_ENVIRONMENT", "8.0.6");
+                    } else {
+                        env.put("BRANCH_FOR_ENVIRONMENT", "master");
+                    }
                 }
             }
         };
@@ -64,19 +71,27 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
     public void onStarted(AbstractBuild build, TaskListener listener) {
         AbstractProject project = build.getProject();
         Map<String, String> envVars = build.getBuildVariables();
-        ServSelJobProperty tjp;
+        ServSelJobProperty ssjp;
         if (project instanceof MatrixConfiguration) {
-            tjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
+            ssjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
         } else {
-            tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
+            ssjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
+        if (ssjp != null && ssjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             String target = descriptor.UsingServer(getShortName(build));
             descriptor.getTargetServer(target).setTask(build.getFullDisplayName());
             descriptor.putFullAssignments(nameNoSpaces(build), target);
             listener.getLogger().println("[Server Selector] Target server set to " + target);
-            listener.getLogger().println("[Server Selector] Version set to " + envVars.get("VERSION"));
-            listener.getLogger().println("[Server Selector] Environment set to " + envVars.get("ENVIRONMENT"));
+            String versionMessage = "[Server Selector] Version set to " + envVars.get("VERSION");
+            if (envVars.get("ENVIRONMENT") != null) {
+                listener.getLogger().println("[Server Selector] Environment set to " + envVars.get("ENVIRONMENT"));
+            }
+            if (envVars.get("VERSION") != null && envVars.get("VERSION").equals("latest")) {
+                versionMessage = versionMessage.concat(" (" + descriptor.getLatest(envVars.get("ENVIRONMENT")) + ")");
+            }
+            if (envVars.get("VERSION") != null) {
+                listener.getLogger().println(versionMessage);
+            }
         }
     }
 
@@ -84,17 +99,17 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
     public void onCompleted(AbstractBuild build, TaskListener listener) {
         AbstractProject project = build.getProject();
         Map<String, String> buildVars = build.getBuildVariables();
-        ServSelJobProperty tjp;
+        ServSelJobProperty ssjp;
         if (project instanceof MatrixConfiguration) {
-            tjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
+            ssjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
         } else {
-            tjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
+            ssjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (tjp != null && tjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
+        if (ssjp != null && ssjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
             TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
             if (targetServer != null) {
                 String targetName = targetServer.getName();
-                if (build.getFullDisplayName().contains("Deploy")) {
+                if (build.getFullDisplayName().contains("DeploySingleServer") || build.getFullDisplayName().contains("DeployCluser")) {
                     if (build.getResult().isBetterOrEqualTo(Result.SUCCESS)) {
                         targetServer.setLastDeployPassed(true);
                     } else {
@@ -102,7 +117,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                     }
                 }
                 String getLock = (String) buildVars.get("GET_LOCK");
-                if (getLock == null || getLock.toLowerCase().equals("false")) {
+                if (getLock == null || getLock.toLowerCase().equals("true")) {
                     listener.getLogger().println("[Server Selector] Releasing server " + targetName);
                     descriptor.releaseServer(targetName);
                 }
@@ -130,8 +145,8 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         return shortName;
     }
 
-    private String getYmlTarget(ServSelJobProperty tjp, String target) {
-        String serverType = tjp.getCategories().get(0);
+    private String getYmlTarget(ServSelJobProperty ssjp, String target) {
+        String serverType = ssjp.getCategories().get(0);
         String shortTargetName = target.substring(0, target.indexOf('.'));
         String firstChar = "" + shortTargetName.charAt(0);
         String nameWithCorrectCase = firstChar.toUpperCase() + shortTargetName.toLowerCase().substring(1);
