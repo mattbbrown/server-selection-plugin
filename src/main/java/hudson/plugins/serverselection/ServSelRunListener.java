@@ -44,7 +44,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                 } else {
                     ssjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
                 }
-                if (ssjp != null && ssjp.getThrottleEnabled()) {
+                if (ssjp != null && ssjp.getServSelEnabled()) {
                     TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
                     String targetName = targetServer != null ? targetServer.getName() : null;
                     String environ = envVars.get("ENVIRONMENT");
@@ -70,26 +70,29 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
     @Override
     public void onStarted(AbstractBuild build, TaskListener listener) {
         AbstractProject project = build.getProject();
-        Map<String, String> envVars = build.getBuildVariables();
+        Map<String, String> buildVars = build.getBuildVariables();
         ServSelJobProperty ssjp;
         if (project instanceof MatrixConfiguration) {
             ssjp = (ServSelJobProperty) ((AbstractProject) project.getParent()).getProperty(ServSelJobProperty.class);
         } else {
             ssjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (ssjp != null && ssjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
+        if (ssjp != null && ssjp.getServSelEnabled() && !(project instanceof MatrixProject)) {
             String target = descriptor.UsingServer(getShortName(build));
-            descriptor.getTargetServer(target).setTask(build.getFullDisplayName());
+            String getLock = buildVars.get("GET_LOCK");
+            if (getLock == null || getLock.toLowerCase().equals("true")) {
+                descriptor.getTargetServer(target).setTask(build.getFullDisplayName());
+            }
             descriptor.putFullAssignments(nameNoSpaces(build), target);
             listener.getLogger().println("[Server Selector] Target server set to " + target);
-            String versionMessage = "[Server Selector] Version set to " + envVars.get("VERSION");
-            if (envVars.get("ENVIRONMENT") != null) {
-                listener.getLogger().println("[Server Selector] Environment set to " + envVars.get("ENVIRONMENT"));
+            String versionMessage = "[Server Selector] Version set to " + buildVars.get("VERSION");
+            if (buildVars.get("ENVIRONMENT") != null) {
+                listener.getLogger().println("[Server Selector] Environment set to " + buildVars.get("ENVIRONMENT"));
             }
-            if (envVars.get("VERSION") != null && envVars.get("VERSION").equals("latest")) {
-                versionMessage = versionMessage.concat(" (" + descriptor.getLatest(envVars.get("ENVIRONMENT")) + ")");
+            if (buildVars.get("VERSION") != null && buildVars.get("VERSION").equals("latest")) {
+                versionMessage = versionMessage.concat(" (" + descriptor.getLatest(buildVars.get("ENVIRONMENT")) + ")");
             }
-            if (envVars.get("VERSION") != null) {
+            if (buildVars.get("VERSION") != null) {
                 listener.getLogger().println(versionMessage);
             }
         }
@@ -105,7 +108,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         } else {
             ssjp = (ServSelJobProperty) project.getProperty(ServSelJobProperty.class);
         }
-        if (ssjp != null && ssjp.getThrottleEnabled() && !(project instanceof MatrixProject)) {
+        if (ssjp != null && ssjp.getServSelEnabled() && !(project instanceof MatrixProject)) {
             TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
             if (targetServer != null) {
                 String targetName = targetServer.getName();
@@ -128,9 +131,16 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
 
     public void onFinalized(AbstractBuild<?, ?> build) {
         TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
+        Map<String, String> buildVars = build.getBuildVariables();
         if (targetServer != null) {
-            descriptor.releaseServer(targetServer.getName());
+            String getLock = (String) buildVars.get("GET_LOCK");
+            if (getLock == null || getLock.toLowerCase().equals("true")) {
+                descriptor.releaseServer(targetServer.getName());
+            }
             descriptor.removeFullAssignments(nameNoSpaces(build));
+            if (build.getFullDisplayName().contains("DeploySingleServer") || build.getFullDisplayName().contains("DeployCluser")) {
+                targetServer.setLastDeployPassed(false);
+            }
         }
     }
 

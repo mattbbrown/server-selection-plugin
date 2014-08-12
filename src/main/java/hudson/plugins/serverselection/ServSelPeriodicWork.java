@@ -6,6 +6,11 @@
 package hudson.plugins.serverselection;
 
 import hudson.Extension;
+import hudson.model.AbstractBuild;
+import hudson.model.Computer;
+import hudson.model.Executor;
+import hudson.model.Hudson;
+import hudson.model.Node;
 import hudson.model.PeriodicWork;
 import hudson.util.TimeUnit2;
 import java.io.BufferedReader;
@@ -37,6 +42,13 @@ public class ServSelPeriodicWork extends PeriodicWork {
 
     @Override
     public long getInitialDelay() {
+        ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
+        if (descriptor != null) {
+            descriptor.getFullAssigns().clear();
+            descriptor.getServers().clear();
+            descriptor.getEnvironments().clear();
+            descriptor.getLatests().clear();
+        }
         return 0;
     }
 
@@ -47,6 +59,7 @@ public class ServSelPeriodicWork extends PeriodicWork {
             updateServerList(descriptor);
             updateEnvironmentList(descriptor);
             updateLatestBuildInfo(descriptor);
+            releaseStuckServers(descriptor);
         }
     }
 
@@ -76,12 +89,28 @@ public class ServSelPeriodicWork extends PeriodicWork {
             TargetServer targetServer = descriptor.getTargetServer(server);
             if (targetServer == null) {
                 targetServer = new TargetServer(server, targetServerType, environment, version, inUse);
-                LOGGER.log(Level.INFO, "Added Server {0}", server);
+                LOGGER.log(Level.INFO, "[Server Selection] Added Server {0}", server);
+                descriptor.removeServer(targetServer);
                 descriptor.addServer(targetServer);
             } else {
+                if (!targetServer.getServerType().equals(targetServerType)) {
+                    LOGGER.log(Level.INFO, "[Server Selection] {0} server type changed from {1} to {2}", new Object[]{targetServer, targetServer.getServerType(), targetServerType});
+                }
                 targetServer.setServerType(targetServerType);
+                if (!targetServer.getEnvironment().equals(environment)) {
+                    LOGGER.log(Level.INFO, "[Server Selection] {0} environment changed from {1} to {2}", new Object[]{targetServer, targetServer.getEnvironment(), environment});
+                }
                 targetServer.setEnvironment(environment);
+                if (!targetServer.getVersion().equals(version)) {
+                    LOGGER.log(Level.INFO, "[Server Selection] {0} version changed from {1} to {2}", new Object[]{targetServer, targetServer.getVersion(), version});
+                }
                 targetServer.setVersion(version);
+                if (targetServer.getInUse() == true && inUse == false) {
+                    LOGGER.log(Level.INFO, "[Server Selection] in_use tag removed from {0}", targetServer);
+                }
+                if (targetServer.getInUse() == false && inUse == true) {
+                    LOGGER.log(Level.INFO, "[Server Selection] in_use tag added to {0}", targetServer);
+                }
                 targetServer.setInUse(inUse);
             }
             targetServer.setStillHere(true);
@@ -95,6 +124,7 @@ public class ServSelPeriodicWork extends PeriodicWork {
             if (servers.get(i).isStillHere()) {
                 servers.get(i).setStillHere(false);
             } else {
+                LOGGER.log(Level.INFO, "[Server Selection] Removed Server {0}", servers.get(i));
                 servers.remove(i);
                 i--;
             }
@@ -109,6 +139,9 @@ public class ServSelPeriodicWork extends PeriodicWork {
         while ((line = reader.readLine()) != null) {
             if (line.charAt(0) != '_') {
                 environments.add(line);
+                if (!descriptor.getEnvironments().contains(line)) {
+                    LOGGER.log(Level.INFO, "[Server Selection] Added Environment {0}", line);
+                }
             }
         }
         descriptor.setEnvironments(environments);
@@ -121,29 +154,31 @@ public class ServSelPeriodicWork extends PeriodicWork {
             BufferedReader reader = createAndExecuteTempFile("jenkinsEnvChefCall.rb", command);
             if (reader != null) {
                 String line = reader.readLine();
-                String[] info = line.split(",");
-                String build_folder = info[0], build_username = info[1];
-                String build_location = "mnt/" + build_username.substring(0, build_username.indexOf("\\")) + "builds/" + build_folder + "/";
-                File file = new File(build_location);
-                final String regex = "\\d+\\.\\d+\\.\\d+\\.\\d+$";
-                String[] directories = file.list(new FilenameFilter() {
-                    @Override
-                    public boolean accept(File current, String name) {
-                        String[] fileNames = new File(current, name).list();
-                        for (String subFileName : fileNames) {
-                            if (subFileName.contains(name)) {
-                                return (new File(current, name).isDirectory()) && name.matches(regex);
-                            }
+                if (line == null) {
+                    LOGGER.log(Level.SEVERE, "[Server Selection] Could not find a latest build for {0}, latest set to \"unknown\"", environ);
+                    descriptor.setLatest(environ, "unknown");
+                } else {
+                    String[] info = line.split(",");
+                    String build_folder = info[0], build_username = info[1];
+                    String build_location = "mnt/" + build_username.substring(0, build_username.indexOf("\\")) + "builds/" + build_folder + "/";
+                    File file = new File(build_location);
+                    final String regex = "\\d+\\.\\d+\\.\\d+\\.\\d+$";
+                    String[] directories = file.list(new FilenameFilter() {
+                        @Override
+                        public boolean accept(File current, String name) {
+                            return (new File(current, name).isDirectory()) && name.matches(regex);
                         }
-                        return false;
+                    });
+                    List<String> dirs = directories == null ? null : Arrays.asList(directories);
+                    String latestBuild = (dirs == null || dirs.isEmpty()) ? null : dirs.get(dirs.size() - 1);
+                    if (latestBuild == null) {
+                        LOGGER.log(Level.SEVERE, "[Server Selection] Could not find a latest build for {0}, latest set to \"unknown\"", environ);
+                        descriptor.setLatest(environ, "unknown");
+                    } else if (descriptor.getLatest(environ) == null || !descriptor.getLatest(environ).equals(latestBuild)) {
+                        LOGGER.log(Level.SEVERE, "[Server Selection] Updating {0} latest to {1}", new Object[]{environ, latestBuild});
+                        descriptor.setLatest(environ, latestBuild);
                     }
-                });
-                List<String> dirs = Arrays.asList(directories);
-                String latestBuild = dirs.get(dirs.size() - 1);
-                if (!descriptor.getLatest(environ).equals(latestBuild)) {
-                    LOGGER.log(Level.SEVERE, "Updating {0} latest to {1}", new Object[]{environ, latestBuild});
                 }
-                descriptor.setLatest(environ, latestBuild);
             }
         }
     }
@@ -174,8 +209,51 @@ public class ServSelPeriodicWork extends PeriodicWork {
             }
             return reader;
         } catch (IOException e) {
-            return null;
+            throw e;
         }
+    }
+
+    private void releaseStuckServers(ServSelJobProperty.DescriptorImpl descriptor) {
+        for (TargetServer ts : descriptor.getServers()) {
+            if (ts.getTask() != null && buildNotRunningOnAnyNodes(ts.getTask())) {
+                LOGGER.log(Level.SEVERE, "[Server Selection] Releasing apparently stuck server {0} from {1}", new Object[]{ts, ts.getTask()});
+                descriptor.releaseServer(ts.getName());
+            }
+        }
+    }
+
+    private boolean buildNotRunningOnAnyNodes(String task) {
+        if (buildRunningOnNode(Hudson.getInstance(), task)) {
+            return false;
+        }
+        for (Node node : Hudson.getInstance().getNodes()) {
+            if (buildRunningOnNode(node, task)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean buildRunningOnNode(Node node, String task) {
+        Computer computer = node.toComputer();
+        if (computer != null) {
+            for (Executor e : computer.getExecutors()) {
+                if (buildRunningOnExecutor(task, e)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean buildRunningOnExecutor(String task, Executor exec) {
+        if (exec.getCurrentExecutable() != null) {
+            AbstractBuild<?, ?> build = (AbstractBuild<?, ?>) exec.getCurrentExecutable();
+            if (build.getFullDisplayName().equals(task)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static final Logger LOGGER = Logger.getLogger(ServSelPeriodicWork.class.getName());

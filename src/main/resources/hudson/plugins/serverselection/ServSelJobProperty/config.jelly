@@ -1,8 +1,8 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form" xmlns:p="/lib/hudson/project">
-    <f:optionalBlock name="throttleEnabled"
+    <f:optionalBlock name="servSelEnabled"
                      title="${%Target Server Selection}"
                      inline="true"
-                     checked="${instance.throttleEnabled}">          
+                     checked="${instance.servSelEnabled}">          
         <f:entry title="Server Type">
             <table width="90%">
                 <tr>

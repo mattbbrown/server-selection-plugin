@@ -116,7 +116,7 @@ public class TargetServer implements Comparable<TargetServer> {
 
     @Override
     public String toString() {
-        return name + "\n";
+        return name;
     }
 
     @Override

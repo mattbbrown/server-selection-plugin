@@ -1,17 +1,17 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout"
          xmlns:t="/lib/hudson" xmlns:f="/lib/form">
     <f:section title="Server Selection">         
-            <f:entry title="Server Types" field="categories">
-                <f:repeatable field="categories" add="${%Add Server Type}" minimum="0">
-                    <table width="100%">
-                        <f:entry title="Name:" field="categoryName">
-                            <f:textbox />
-                        </f:entry>
-                    </table>
-                    <div align="right">
-                        <f:repeatableDeleteButton/>
-                    </div>
-                </f:repeatable>
-            </f:entry>
+        <f:entry title="Server Types" field="categories">
+            <f:repeatable field="categories" add="${%Add Server Type}" minimum="0">
+                <table width="100%">
+                    <f:entry title="Name:" field="categoryName">
+                        <f:textbox />
+                    </f:entry>
+                </table>
+                <div align="right">
+                    <f:repeatableDeleteButton/>
+                </div>
+            </f:repeatable>
+        </f:entry>
     </f:section>
 </j:jelly>

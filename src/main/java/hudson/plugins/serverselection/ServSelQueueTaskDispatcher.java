@@ -20,13 +20,25 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
 
     @Override
     public CauseOfBlockage canRun(Queue.Item item) {
+        for (QueueTaskDispatcher qtd : all()) {
+            if (!qtd.equals(this)) {
+                CauseOfBlockage otherBlock = qtd.canRun(item);
+                if (otherBlock != null) {
+                    return otherBlock;
+                }
+            }
+        }
+        if (super.canRun(item) != null) {
+            return super.canRun(item);
+        }
+        
         try {
             Task task = item.task;
             ServSelJobProperty ssjp = getServSelJobProperty(task);
             if (!shouldAssignServer(item, ssjp)) {
                 return null;
             }
-            
+
             String targetServerType = ssjp.getCategories().get(0);
             String serverTaken;
             String params = item.getParams().concat("\n");
@@ -35,7 +47,6 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
                 int indOfTarget = params.indexOf("TARGET=") + 7;
                 specificServer = params.substring(indOfTarget, params.indexOf("\n", indOfTarget));
             }
-
             ServSelJobProperty.DescriptorImpl descriptor = (ServSelJobProperty.DescriptorImpl) ssjp.getDescriptor();
             serverTaken = descriptor.assignServer(targetServerType, item, specificServer);
             if (serverTaken == null && !specificServer.equals("First Available Server")) {
@@ -49,7 +60,7 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
                 return CauseOfBlockage.fromMessage(Messages._ThrottleQueueTaskDispatcher_NoFreeServers(targetServerType));
             }
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Exception raised in canRun: ", e);
+            LOGGER.log(Level.SEVERE, "Exception raised in canRun:", e);
         }
         return null;
     }
@@ -59,7 +70,7 @@ public class ServSelQueueTaskDispatcher extends QueueTaskDispatcher {
         if (ssjp == null) {
             return false;
         }
-        if (!ssjp.getThrottleEnabled()) {
+        if (!ssjp.getServSelEnabled()) {
             return false;
         }
 

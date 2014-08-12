@@ -108,7 +108,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         }
     }
 
-    public boolean getThrottleEnabled() {
+    public boolean getServSelEnabled() {
         return servSelEnabled;
     }
 
@@ -149,7 +149,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             properties = _properties != null ? new ArrayList<ServSelJobProperty>(_properties.keySet()) : Collections.<ServSelJobProperty>emptySet();
         }
         for (ServSelJobProperty t : properties) {
-            if (t.getThrottleEnabled()) {
+            if (t.getServSelEnabled()) {
                 if (t.getCategories() != null && t.getCategories().contains(category)) {
                     AbstractProject<?, ?> p = t.owner;
                     if (/* not deleted */getItem(p.getParent(), p.getName()) == p && /* has not since been reconfigured */ p.getProperty(ServSelJobProperty.class) == t) {
@@ -262,8 +262,8 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             return environments;
         }
 
-        public void setEnvironments(List<String> environments) {
-            this.environments = environments;
+        public void setEnvironments(List<String> newEnvironment) {
+            environments = newEnvironment;
         }
 
         public synchronized String assignServer(String targetServerType, Queue.Item item, String specificTarget) throws IOException, InterruptedException {
@@ -296,7 +296,6 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                 if (version.equals("latest") && environment != null) {
                     version = getLatest(environment);
                 }
-
             }
             String freeServer;
             if (specificTarget.equals("First Available Server")) {
@@ -324,8 +323,8 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         }
 
         public String assignFirstAvailableServer(Queue.Item item, String targetServerType, String shouldDeploy, String version, String environment) {
-            Task task = item.task;
             String freeServer = null;
+            Task task = item.task;
             boolean foundServer = false;
             for (TargetServer targetServer : servers) {
                 if (targetServer.getServerType().equals(targetServerType) && !targetServer.isBusy() && !targetServer.getInUse()) {
@@ -353,22 +352,23 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         }
 
         public void assign(TargetServer targetServer, Task task, String shouldDeploy) {
-            targetServer.setBusy(true);
             targetServer.setShouldDeploy(shouldDeploy);
             String serverName = targetServer.getName();
             int num = 1;
             boolean foundTask = false;
-            String taskName = null;
+            String taskName;
             while (!foundTask) {
-                taskName = task.getFullDisplayName().replace(" ", "_") + "_num_" + num;
+                taskName = task.getFullDisplayName().replace(" ", "_") + "_" + num;
                 if (taskAssignments.get(taskName) == null) {
+                    targetServer.setBusy(true);
                     foundTask = true;
+                    taskAssignments.put(taskName, serverName);
+                    LOGGER.log(Level.SEVERE, "[Server Selection] assigned server {0} to task {1}", new Object[]{serverName, taskName});
                 } else {
                     num++;
                 }
             }
-            LOGGER.log(Level.SEVERE, "assigned server {0} to task {1}", new Object[]{serverName, taskName});
-            taskAssignments.put(taskName, serverName);
+
         }
 
         private String shouldServerDeploy(TargetServer targetServer, String version, String environment) {
@@ -387,23 +387,18 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
         }
 
         public String UsingServer(String displayName) {
+            String taskName;
             int num = 1;
-            boolean foundServer = false;
-            String taskName = null;
             while (num < 100) {
-                taskName = displayName.replace(" ", "_") + "_num_" + num;
+                taskName = displayName.replace(" ", "_") + "_" + num;
                 if (taskAssignments.get(taskName) != null) {
-                    foundServer = true;
-                    break;
+                    return taskAssignments.remove(taskName);
                 } else {
                     num++;
                 }
             }
-            if (!foundServer) {
-                LOGGER.log(Level.SEVERE, "NO SERVER FOUND for {0}, taskAssignments: {1}", new Object[]{displayName, taskAssignments});
-            }
-            String server = taskAssignments.remove(taskName);
-            return server;
+            LOGGER.log(Level.SEVERE, "[Server Selection] NO SERVER FOUND for {0}, taskAssignments: {1}", new Object[]{displayName, taskAssignments});
+            return null;
         }
 
         public String getServerAssignment(String server) {
@@ -414,14 +409,22 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             servers.add(targetServer);
         }
 
+        public void removeServer(TargetServer targetServer) {
+            servers.remove(targetServer);
+        }
+
         public void releaseServer(String server) {
             TargetServer targetServer = getTargetServer(server);
-            targetServer.setTask(null);
             targetServer.setBusy(false);
+            targetServer.setTask(null);
         }
 
         public List<TargetServer> getServers() {
             return servers;
+        }
+
+        public Map<String, String> getLatests() {
+            return latestByEnviron;
         }
 
         public TargetServer getTargetServer(String server) {
