@@ -30,17 +30,17 @@ public class ServSelTarParameterDefinition extends SimpleParameterDefinition {
     }
 
     @DataBoundConstructor
-    public ServSelTarParameterDefinition() {
+    public ServSelTarParameterDefinition(String defaultValue) {
         super("TARGET", "Note: selecting a specific server will override the Target Server Type");
         ServSelJobProperty.DescriptorImpl descriptor = Jenkins.getInstance().getDescriptorByType(ServSelJobProperty.DescriptorImpl.class);
         servers = descriptor.getAllServersList();
-        defaultValue = "First Available Server";
+        this.defaultValue = defaultValue == null || defaultValue.equals("") ? "First Available Server" : defaultValue;
     }
 
     private ServSelTarParameterDefinition(String name, List<String> servers, String defaultValue, String description) {
         super(name, description);
         this.servers = servers;
-        this.defaultValue = "First Available Server";
+        this.defaultValue = defaultValue == null || defaultValue.equals("") ? "First Available Server" : defaultValue;
     }
 
     @Override
@@ -64,7 +64,7 @@ public class ServSelTarParameterDefinition extends SimpleParameterDefinition {
 
     @Override
     public StringParameterValue getDefaultParameterValue() {
-        return new StringParameterValue(getName(), (String) (defaultValue == null ? "First Available Server" : defaultValue), getDescription());
+        return new StringParameterValue(getName(), (String) (defaultValue == null || defaultValue == "" ? "First Available Server" : defaultValue), getDescription());
     }
 
     private ServSelParameterValue checkValue(ServSelParameterValue value) {

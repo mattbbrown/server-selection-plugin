@@ -21,11 +21,13 @@ public class TargetServer implements Comparable<TargetServer> {
     private boolean busy;
     private boolean stillHere;
     private boolean lastDeployPassed;
+    private int stuckCounter;
 
     public TargetServer(String name) {
         this.name = name;
         busy = false;
         lastDeployPassed = true;
+        stuckCounter = 0;
     }
 
     public TargetServer(String name, String serverType, String environment, String version, boolean inUse) {
@@ -36,8 +38,22 @@ public class TargetServer implements Comparable<TargetServer> {
         this.inUse = inUse;
         busy = false;
         lastDeployPassed = true;
+        stuckCounter = 0;
     }
-
+    
+    public int incrementStuckCounter(){
+        stuckCounter++;
+        return stuckCounter;
+    }
+    
+    public int getStuckCounter(){
+        return stuckCounter;
+    }
+    
+    public void zeroStuckCounter(){
+        stuckCounter = 0;
+    }
+    
     public void setInUse(boolean inUse) {
         this.inUse = inUse;
     }
@@ -124,7 +140,7 @@ public class TargetServer implements Comparable<TargetServer> {
         boolean result = false;
         if (o != null && o instanceof TargetServer) {
             TargetServer ts = (TargetServer) o;
-            if (name != null && ts != null) {
+            if (name != null) {
                 result = name.equals(ts.getName());
             }
         }

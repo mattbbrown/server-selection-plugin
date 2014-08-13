@@ -56,12 +56,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                     if (shouldDeploy != null) {
                         env.put("DEPLOY", shouldDeploy);
                     }
-                    //This is currently hardcoded until a suitable UI is built under the global configuration page
-                    if (environ != null && environ.equals("build80")) {
-                        env.put("BRANCH_FOR_ENVIRONMENT", "8.0.6");
-                    } else {
-                        env.put("BRANCH_FOR_ENVIRONMENT", "master");
-                    }
+                    env.put("BRANCH_FOR_ENVIRONMENT", descriptor.getBranchByEnvironment(environ));
                 }
             }
         };
@@ -111,7 +106,6 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         if (ssjp != null && ssjp.getServSelEnabled() && !(project instanceof MatrixProject)) {
             TargetServer targetServer = descriptor.getFullAssignments(nameNoSpaces(build));
             if (targetServer != null) {
-                String targetName = targetServer.getName();
                 if (build.getFullDisplayName().contains("DeploySingleServer") || build.getFullDisplayName().contains("DeployCluser")) {
                     if (build.getResult().isBetterOrEqualTo(Result.SUCCESS)) {
                         targetServer.setLastDeployPassed(true);
@@ -121,8 +115,8 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
                 }
                 String getLock = (String) buildVars.get("GET_LOCK");
                 if (getLock == null || getLock.toLowerCase().equals("true")) {
-                    listener.getLogger().println("[Server Selector] Releasing server " + targetName);
-                    descriptor.releaseServer(targetName);
+                    listener.getLogger().println("[Server Selector] Releasing server " + targetServer);
+                    descriptor.releaseServer(targetServer);
                 }
                 descriptor.removeFullAssignments(nameNoSpaces(build));
             }
@@ -135,7 +129,7 @@ public final class ServSelRunListener extends RunListener<AbstractBuild> {
         if (targetServer != null) {
             String getLock = (String) buildVars.get("GET_LOCK");
             if (getLock == null || getLock.toLowerCase().equals("true")) {
-                descriptor.releaseServer(targetServer.getName());
+                descriptor.releaseServer(targetServer);
             }
             descriptor.removeFullAssignments(nameNoSpaces(build));
             if (build.getFullDisplayName().contains("DeploySingleServer") || build.getFullDisplayName().contains("DeployCluser")) {

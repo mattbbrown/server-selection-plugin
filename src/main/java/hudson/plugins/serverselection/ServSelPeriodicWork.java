@@ -48,6 +48,7 @@ public class ServSelPeriodicWork extends PeriodicWork {
             descriptor.getServers().clear();
             descriptor.getEnvironments().clear();
             descriptor.getLatests().clear();
+            descriptor.getItemNumbers().clear();
         }
         return 0;
     }
@@ -215,9 +216,21 @@ public class ServSelPeriodicWork extends PeriodicWork {
 
     private void releaseStuckServers(ServSelJobProperty.DescriptorImpl descriptor) {
         for (TargetServer ts : descriptor.getServers()) {
+            if (ts.isBusy() && ts.getTask() == null) {
+                ts.incrementStuckCounter();
+                if (serverHasBeenStuckForXMinutes(1, ts)) {
+                    LOGGER.log(Level.SEVERE, "[Server Selection] Releasing apparently stuck server {0}", new Object[]{ts, ts.getTask()});
+                    descriptor.releaseServer(ts);
+                    ts.zeroStuckCounter();
+                }
+            } else {
+                ts.zeroStuckCounter();
+            }
+            
             if (ts.getTask() != null && buildNotRunningOnAnyNodes(ts.getTask())) {
                 LOGGER.log(Level.SEVERE, "[Server Selection] Releasing apparently stuck server {0} from {1}", new Object[]{ts, ts.getTask()});
-                descriptor.releaseServer(ts.getName());
+                descriptor.releaseServer(ts);
+                ts.zeroStuckCounter();
             }
         }
     }
@@ -257,4 +270,9 @@ public class ServSelPeriodicWork extends PeriodicWork {
     }
 
     private static final Logger LOGGER = Logger.getLogger(ServSelPeriodicWork.class.getName());
+
+    private boolean serverHasBeenStuckForXMinutes(int minutes, TargetServer ts) {
+        int timesStuck = ts.getStuckCounter();
+        return timesStuck > minutes;
+    }
 }

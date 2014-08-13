@@ -178,11 +178,13 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
     public static final class DescriptorImpl extends JobPropertyDescriptor {
 
         public static final String DELIMETER = "\\r?\\n";
+        private String envBranches = "";
         private List<ThrottleCategory> categories = new ArrayList<ThrottleCategory>();
         private List<TargetServer> servers = Collections.synchronizedList(new ArrayList<TargetServer>());
         private List<String> allServersList = updateServerList();
-        private List<Integer> items = new ArrayList<Integer>();
+        private Map<Integer, TargetServer> items = new HashMap<Integer, TargetServer>();
         private List<String> environments = Collections.synchronizedList(new ArrayList<String>());
+        private Map<String, String> envToBranch = new HashMap<String, String>();
         private Map<String, String> latestByEnviron = new HashMap<String, String>();
         private Map<String, String> taskAssignments = new HashMap<String, String>();
         private Map<String, TargetServer> fullNameAssigns = new HashMap<String, TargetServer>();
@@ -231,6 +233,34 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             servers.add(targetServer);
         }
 
+        public String getEnvBranches() {
+            return envBranches;
+        }
+
+        public void setEnvBranches(String envBranches) {
+            this.envBranches = envBranches;
+            parseBranchStringIntoHash(envBranches);
+        }
+
+        private void parseBranchStringIntoHash(String envBranches) {
+            envBranches = envBranches.trim();
+            String[] lines = envBranches.split("\n");
+            for (String line : lines) {
+                String[] parts = line.split("=");
+                String environment = parts[0];
+                String branch = parts[1];
+                envToBranch.put(environment, branch);
+            }
+        }
+
+        public String getBranchByEnvironment(String environment) {
+            String branch = envToBranch.get(environment);
+            if(branch != null){
+                return branch;
+            }
+            return "master";
+        }
+
         public Map<String, TargetServer> getFullAssigns() {
             return fullNameAssigns;
         }
@@ -255,6 +285,11 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             latestByEnviron.put(environ, latest);
         }
 
+        public Map<Integer, TargetServer> getItemNumbers() {
+            return items;
+        }
+
+
         public List<String> getEnvironments() {
             if (environments.remove("master")) {
                 environments.add(0, "master");
@@ -272,8 +307,8 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             String version = null;
             String environment = null;
 
-            if (items.contains(item.id)) {
-                items.remove(items.indexOf(item.id));
+            if (items.containsKey(item.id)) {
+                items.remove(item.id);
                 return "Server Already Selected";
             }
 
@@ -282,8 +317,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             }
 
             if (params.toLowerCase().contains("get_lock=false")) {
-                assign(getTargetServer(specificTarget), item.task, shouldDeploy);
-                items.add(item.id);
+                assign(getTargetServer(specificTarget), item, shouldDeploy);
                 return specificTarget;
             }
             if (params.contains("ENVIRONMENT=")) {
@@ -314,8 +348,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                         shouldDeploy = shouldServerDeploy(targetServer, version, environment);
                     }
                     freeServer = specificTarget;
-                    assign(targetServer, item.task, shouldDeploy);
-                    items.add(item.id);
+                    assign(targetServer, item, shouldDeploy);
                     return freeServer;
                 }
             }
@@ -324,7 +357,6 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
 
         public String assignFirstAvailableServer(Queue.Item item, String targetServerType, String shouldDeploy, String version, String environment) {
             String freeServer = null;
-            Task task = item.task;
             boolean foundServer = false;
             for (TargetServer targetServer : servers) {
                 if (targetServer.getServerType().equals(targetServerType) && !targetServer.isBusy() && !targetServer.getInUse()) {
@@ -332,8 +364,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                     if (needsToDeploy.equals("false")) {
                         foundServer = true;
                         freeServer = targetServer.getName();
-                        assign(targetServer, task, shouldDeploy);
-                        items.add(item.id);
+                        assign(targetServer, item, shouldDeploy);
                         break;
                     }
                 }
@@ -342,8 +373,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
                 for (TargetServer targetServer : servers) {
                     if (targetServer.getServerType().equals(targetServerType) && !targetServer.isBusy() && !targetServer.getInUse()) {
                         freeServer = targetServer.getName();
-                        assign(targetServer, task, "true");
-                        items.add(item.id);
+                        assign(targetServer, item, "true");
                         break;
                     }
                 }
@@ -351,19 +381,19 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             return freeServer;
         }
 
-        public void assign(TargetServer targetServer, Task task, String shouldDeploy) {
+        public void assign(TargetServer targetServer, Queue.Item item, String shouldDeploy) {
+            items.put(item.id, targetServer);
             targetServer.setShouldDeploy(shouldDeploy);
             String serverName = targetServer.getName();
             int num = 1;
             boolean foundTask = false;
             String taskName;
             while (!foundTask) {
-                taskName = task.getFullDisplayName().replace(" ", "_") + "_" + num;
+                taskName = item.task.getFullDisplayName().replace(" ", "_") + "_" + num;
                 if (taskAssignments.get(taskName) == null) {
                     targetServer.setBusy(true);
                     foundTask = true;
                     taskAssignments.put(taskName, serverName);
-                    LOGGER.log(Level.SEVERE, "[Server Selection] assigned server {0} to task {1}", new Object[]{serverName, taskName});
                 } else {
                     num++;
                 }
@@ -413,8 +443,7 @@ public class ServSelJobProperty extends JobProperty<AbstractProject<?, ?>> {
             servers.remove(targetServer);
         }
 
-        public void releaseServer(String server) {
-            TargetServer targetServer = getTargetServer(server);
+        public void releaseServer(TargetServer targetServer) {
             targetServer.setBusy(false);
             targetServer.setTask(null);
         }
